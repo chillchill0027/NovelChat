@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include
+        domain="file"
+        path="rpg/"
+        requireFlags="clientSideEncryption" />
+    <include
+        domain="file"
+        path="conversations_index.json"
+        requireFlags="clientSideEncryption" />
+</full-backup-content>

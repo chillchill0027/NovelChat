@@ -1,0 +1,491 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NovelChat Advanced Story Import v1",
+  "type": "object",
+  "required": ["world_setting", "player"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "world_setting": {
+      "$ref": "#/$defs/worldSetting"
+    },
+    "player": {
+      "$ref": "#/$defs/player"
+    },
+    "npcs": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/npc"
+      }
+    },
+    "worldbook": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/worldbookEntry"
+      }
+    },
+    "opening": {
+      "$ref": "#/$defs/opening"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "nonBlankString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "string"
+      }
+    },
+    "stringMap": {
+      "type": "object",
+      "maxProperties": 24,
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "worldSetting": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "genre": {
+          "type": "string"
+        },
+        "tech_level": {
+          "type": "string"
+        },
+        "magic_level": {
+          "type": "string"
+        },
+        "tone": {
+          "type": "string"
+        },
+        "forbidden": {
+          "$ref": "#/$defs/stringList"
+        },
+        "description": {
+          "type": "string"
+        },
+        "lore": {
+          "$ref": "#/$defs/worldLore"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["description"],
+          "properties": {
+            "description": {
+              "$ref": "#/$defs/nonBlankString"
+            }
+          }
+        },
+        {
+          "required": ["lore"],
+          "properties": {
+            "lore": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/worldLore"
+                },
+                {
+                  "minProperties": 1
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "worldLore": {
+      "type": "object",
+      "properties": {
+        "era": {
+          "type": "string"
+        },
+        "premise": {
+          "type": "string"
+        },
+        "history": {
+          "type": "string"
+        },
+        "geography": {
+          "type": "string"
+        },
+        "cosmology": {
+          "type": "string"
+        },
+        "society": {
+          "type": "string"
+        },
+        "culture": {
+          "type": "string"
+        },
+        "politics": {
+          "type": "string"
+        },
+        "economy": {
+          "type": "string"
+        },
+        "law": {
+          "type": "string"
+        },
+        "religion": {
+          "type": "string"
+        },
+        "languages": {
+          "$ref": "#/$defs/stringList"
+        },
+        "calendar": {
+          "type": "string"
+        },
+        "power_system": {
+          "type": "string"
+        },
+        "technology_rules": {
+          "type": "string"
+        },
+        "factions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "conflicts": {
+          "$ref": "#/$defs/stringList"
+        },
+        "rules": {
+          "$ref": "#/$defs/stringList"
+        },
+        "themes": {
+          "$ref": "#/$defs/stringList"
+        },
+        "narrative_style": {
+          "type": "string"
+        },
+        "custom": {
+          "$ref": "#/$defs/stringMap"
+        }
+      },
+      "additionalProperties": true
+    },
+    "characterLore": {
+      "type": "object",
+      "properties": {
+        "aliases": {
+          "$ref": "#/$defs/stringList"
+        },
+        "role": {
+          "type": "string"
+        },
+        "pronouns": {
+          "type": "string"
+        },
+        "birth_date": {
+          "type": "string"
+        },
+        "nationality": {
+          "type": "string"
+        },
+        "residence": {
+          "type": "string"
+        },
+        "education": {
+          "type": "string"
+        },
+        "values": {
+          "$ref": "#/$defs/stringList"
+        },
+        "goals": {
+          "$ref": "#/$defs/stringList"
+        },
+        "motivations": {
+          "$ref": "#/$defs/stringList"
+        },
+        "fears": {
+          "$ref": "#/$defs/stringList"
+        },
+        "weaknesses": {
+          "$ref": "#/$defs/stringList"
+        },
+        "secrets": {
+          "$ref": "#/$defs/stringList"
+        },
+        "habits": {
+          "$ref": "#/$defs/stringList"
+        },
+        "speech_style": {
+          "type": "string"
+        },
+        "abilities": {
+          "$ref": "#/$defs/stringList"
+        },
+        "knowledge": {
+          "$ref": "#/$defs/stringList"
+        },
+        "boundaries": {
+          "$ref": "#/$defs/stringList"
+        },
+        "character_arc": {
+          "type": "string"
+        },
+        "relationship_notes": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "custom": {
+          "$ref": "#/$defs/stringMap"
+        }
+      },
+      "additionalProperties": true
+    },
+    "physicalState": {
+      "type": "object",
+      "properties": {
+        "stamina": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "health": {
+          "type": "string"
+        },
+        "injuries": {
+          "$ref": "#/$defs/stringList"
+        },
+        "fatigue": {
+          "type": "string"
+        },
+        "hunger": {
+          "type": "string"
+        },
+        "pain": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "mentalState": {
+      "type": "object",
+      "properties": {
+        "mood": {
+          "type": "string"
+        },
+        "stress": {
+          "type": "string"
+        },
+        "focus": {
+          "type": "string"
+        },
+        "current_thoughts": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "inventoryItem": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9999
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "acquired_at": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "player": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "gender": {
+          "type": "string"
+        },
+        "race": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "personality": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string"
+        },
+        "appearance": {
+          "type": "string"
+        },
+        "skills": {
+          "$ref": "#/$defs/stringList"
+        },
+        "lore": {
+          "$ref": "#/$defs/characterLore"
+        },
+        "physical_state": {
+          "$ref": "#/$defs/physicalState"
+        },
+        "mental_state": {
+          "$ref": "#/$defs/mentalState"
+        },
+        "inventory": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/inventoryItem"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "npc": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "gender": {
+          "type": "string"
+        },
+        "race": {
+          "type": "string"
+        },
+        "occupation": {
+          "type": "string"
+        },
+        "personality": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string"
+        },
+        "appearance": {
+          "type": "string"
+        },
+        "relationship_to_player": {
+          "type": "string"
+        },
+        "lore": {
+          "$ref": "#/$defs/characterLore"
+        },
+        "physical_state": {
+          "$ref": "#/$defs/physicalState"
+        },
+        "mental_state": {
+          "$ref": "#/$defs/mentalState"
+        },
+        "inventory": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/inventoryItem"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "worldbookEntry": {
+      "type": "object",
+      "required": ["type", "name", "description"],
+      "properties": {
+        "type": {
+          "enum": ["location", "item", "organization", "event", "character"]
+        },
+        "name": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "description": {
+          "$ref": "#/$defs/nonBlankString"
+        },
+        "keywords": {
+          "$ref": "#/$defs/stringList"
+        },
+        "related_characters": {
+          "$ref": "#/$defs/stringList"
+        },
+        "related_events": {
+          "$ref": "#/$defs/stringList"
+        },
+        "related_locations": {
+          "$ref": "#/$defs/stringList"
+        },
+        "is_secret": {
+          "type": "boolean"
+        },
+        "known_by_player": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "opening": {
+      "type": "object",
+      "properties": {
+        "current_location": {
+          "type": "string"
+        },
+        "time_of_day": {
+          "type": "string"
+        },
+        "weather": {
+          "type": "string"
+        },
+        "mood": {
+          "type": "string"
+        },
+        "scene_description": {
+          "type": "string"
+        },
+        "active_characters": {
+          "$ref": "#/$defs/stringList"
+        },
+        "pending_events": {
+          "$ref": "#/$defs/stringList"
+        },
+        "global_flags": {
+          "$ref": "#/$defs/stringMap"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
