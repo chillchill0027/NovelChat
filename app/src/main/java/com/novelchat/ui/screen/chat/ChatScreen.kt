@@ -1,5 +1,7 @@
 package com.novelchat.ui.screen.chat
 
+import android.content.ClipData
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -43,6 +45,8 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -90,6 +94,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -151,8 +158,13 @@ fun ChatScreen(
     var isUserDragging by remember { mutableStateOf(false) }
     var showLeaveConfirmation by remember { mutableStateOf(false) }
     var showSavingNotice by remember { mutableStateOf(false) }
+    var pendingRegeneration by remember { mutableStateOf<RoundRegenerationRequest?>(null) }
+    var editingAction by remember { mutableStateOf<ChatMessageItem?>(null) }
+    var editedActionText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
     val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
@@ -365,6 +377,37 @@ fun ChatScreen(
                         MessageBubble(
                             message = message,
                             playerName = state.playerState?.name.orEmpty().ifBlank { "主角" },
+                            regenerationEnabled = !state.isStreaming,
+                            onCopy = { content ->
+                                scope.launch {
+                                    clipboard.setClipEntry(
+                                        ClipEntry(
+                                            ClipData.newPlainText("NovelChat 行动提示词", content)
+                                        )
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "已复制行动提示词",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            },
+                            onEdit = { actionMessage ->
+                                editingAction = actionMessage
+                                editedActionText = actionMessage.content
+                            },
+                            onRegenerate = { narrativeMessage ->
+                                state.messages
+                                    .lastOrNull {
+                                        it.turn == narrativeMessage.turn && it.role == "user"
+                                    }
+                                    ?.let { action ->
+                                        pendingRegeneration = RoundRegenerationRequest(
+                                            turn = narrativeMessage.turn,
+                                            action = action.content
+                                        )
+                                    }
+                            },
                             onRetry = {
                                 initialHistoryPositioned = true
                                 autoFollowLatest = true
@@ -494,6 +537,90 @@ fun ChatScreen(
             confirmButton = {
                 TextButton(onClick = { showSavingNotice = false }) {
                     Text("知道了")
+                }
+            },
+            shape = RoundedCornerShape(8.dp)
+        )
+    }
+    pendingRegeneration?.let { request ->
+        AlertDialog(
+            onDismissRequest = { pendingRegeneration = null },
+            icon = { Icon(Icons.Default.Refresh, null, tint = PrimaryPink) },
+            title = { Text("重新生成第${request.turn}轮？") },
+            text = {
+                Text(
+                    "将回到第${request.turn}轮开始前，并替换这一轮及之后的旧剧情、角色和世界状态。",
+                    color = DimText
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingRegeneration = null
+                        initialHistoryPositioned = true
+                        autoFollowLatest = true
+                        chatViewModel.regenerateRound(request.turn, request.action)
+                    }
+                ) {
+                    Text("重新生成", color = PrimaryPink)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRegeneration = null }) {
+                    Text("取消", color = DimText)
+                }
+            },
+            shape = RoundedCornerShape(8.dp)
+        )
+    }
+    editingAction?.let { message ->
+        AlertDialog(
+            onDismissRequest = { editingAction = null },
+            icon = { Icon(Icons.Default.Edit, null, tint = PrimaryPink) },
+            title = { Text("修改第${message.turn}轮行动") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editedActionText,
+                        onValueChange = {
+                            editedActionText = ChatInputPolicy.normalizeDraft(it)
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 260.dp),
+                        label = { Text("行动提示词") },
+                        maxLines = 10,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = BrightText,
+                            unfocusedTextColor = BrightText,
+                            focusedBorderColor = PrimaryPink,
+                            unfocusedBorderColor = OutlineSoft
+                        )
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "保存后会回到本轮开始前，并根据修改后的提示词重新生成；本轮之后的旧分支将被替换。",
+                        color = DimText,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editedActionText.isNotBlank(),
+                    onClick = {
+                        val revised = editedActionText
+                        editingAction = null
+                        initialHistoryPositioned = true
+                        autoFollowLatest = true
+                        chatViewModel.regenerateRound(message.turn, revised)
+                    }
+                ) {
+                    Text("保存并重新生成", color = PrimaryPink)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingAction = null }) {
+                    Text("取消", color = DimText)
                 }
             },
             shape = RoundedCornerShape(8.dp)
@@ -836,17 +963,33 @@ private fun GenerationStatusStrip(statusText: String) {
 private fun MessageBubble(
     message: ChatMessageItem,
     playerName: String,
+    regenerationEnabled: Boolean,
+    onCopy: (String) -> Unit,
+    onEdit: (ChatMessageItem) -> Unit,
+    onRegenerate: (ChatMessageItem) -> Unit,
     onRetry: () -> Unit
 ) {
     when (message.role) {
-        "user" -> UserActionBubble(message, playerName)
+        "user" -> UserActionBubble(
+            message,
+            playerName,
+            regenerationEnabled,
+            onCopy,
+            onEdit
+        )
         "error" -> ErrorMessageBubble(message, onRetry)
-        else -> NarrativeMessage(message)
+        else -> NarrativeMessage(message, regenerationEnabled, onRegenerate)
     }
 }
 
 @Composable
-private fun UserActionBubble(message: ChatMessageItem, playerName: String) {
+private fun UserActionBubble(
+    message: ChatMessageItem,
+    playerName: String,
+    regenerationEnabled: Boolean,
+    onCopy: (String) -> Unit,
+    onEdit: (ChatMessageItem) -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalAlignment = Alignment.End
@@ -870,11 +1013,35 @@ private fun UserActionBubble(message: ChatMessageItem, playerName: String) {
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
             )
         }
+        Row {
+            TextButton(
+                onClick = { onCopy(message.content) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("复制", fontSize = 11.sp)
+            }
+            if (regenerationEnabled) {
+                TextButton(
+                    onClick = { onEdit(message) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("修改", fontSize = 11.sp)
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun NarrativeMessage(message: ChatMessageItem) {
+private fun NarrativeMessage(
+    message: ChatMessageItem,
+    regenerationEnabled: Boolean,
+    onRegenerate: (ChatMessageItem) -> Unit
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("第${message.turn}轮", color = PrimaryPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -882,6 +1049,17 @@ private fun NarrativeMessage(message: ChatMessageItem) {
             HorizontalDivider(modifier = Modifier.weight(1f), color = OutlineSoft)
             Spacer(Modifier.width(7.dp))
             Text(if (message.isStreaming) "旁白生成中" else "旁白", color = DimText, fontSize = 10.sp)
+            if (regenerationEnabled && !message.isStreaming) {
+                Spacer(Modifier.width(2.dp))
+                TextButton(
+                    onClick = { onRegenerate(message) },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("重新生成", fontSize = 10.sp)
+                }
+            }
         }
         Spacer(Modifier.height(9.dp))
         Row {
@@ -903,6 +1081,11 @@ private fun NarrativeMessage(message: ChatMessageItem) {
         }
     }
 }
+
+private data class RoundRegenerationRequest(
+    val turn: Int,
+    val action: String
+)
 
 @Composable
 private fun ErrorMessageBubble(message: ChatMessageItem, onRetry: () -> Unit) {

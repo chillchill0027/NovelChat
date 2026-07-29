@@ -42,7 +42,7 @@ class LegacyDataMigrator(
                 when {
                     containsLegacyText(entry.characterDesc) -> {
                         val identity = identityName.takeIf { it != migratedName && it != "我" }.orEmpty()
-                        listOf(identity, "旧版测试故事，已迁移为通用叙事开局。").filter { it.isNotBlank() }.joinToString(" · ")
+                        identity.ifBlank { "互动故事" }
                     }
                     identityName != migratedName && identityName != "我" -> {
                         listOf(identityName, entry.characterDesc).filter { it.isNotBlank() }.joinToString(" · ")
@@ -53,7 +53,7 @@ class LegacyDataMigrator(
                 entry.characterDesc
             },
             lastMessage = if (containsLegacyText(entry.lastMessage)) {
-                "旧版测试记录，建议重新开始剧情"
+                ""
             } else {
                 entry.lastMessage
             }
@@ -121,7 +121,10 @@ class LegacyDataMigrator(
             "自己用手指",
             "填补你的空虚",
             "指尖带来的",
-            "持续、有节奏的刺激"
+            "持续、有节奏的刺激",
+            "旧版测试故事",
+            "旧版测试记录",
+            "已迁移为通用叙事开局"
         )
 
         val legacyTerms = listOf(

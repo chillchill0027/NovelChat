@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.model.ApiProfile
 import com.novelchat.ui.theme.*
 import com.novelchat.ui.viewmodel.SetupFlowPolicy
@@ -40,12 +41,16 @@ fun ApiSetupScreen(
     val state by viewModel.state.collectAsState()
     var saveName by remember { mutableStateOf("") }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showRoutingDialog by rememberSaveable { mutableStateOf(false) }
     var pendingProfileDelete by remember { mutableStateOf<ApiProfile?>(null) }
     var apiKeyVisible by rememberSaveable { mutableStateOf(false) }
     val canContinue = SetupFlowPolicy.canContinue(state.apiUrl, state.apiKey, state.model)
     val configurationError = SetupFlowPolicy.validationError(state.apiUrl, state.apiKey, state.model)
     val hasSuccessfulTest = SetupFlowPolicy.hasSuccessfulTest(state.testResult)
     val isConnectionBusy = state.isTesting || state.isContinuing || state.isProfileMutating
+    val assignedStageCount = AiCallStage.entries.count {
+        state.apiStageRoutes.profileName(it).isNotBlank()
+    }
 
     BackHandler(enabled = isConnectionBusy) {}
 
@@ -123,6 +128,27 @@ fun ApiSetupScreen(
                         }
                     }
                 }
+            }
+
+            OutlinedButton(
+                onClick = { showRoutingDialog = true },
+                enabled = state.profiles.isNotEmpty() && !isConnectionBusy,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrightText)
+            ) {
+                Icon(Icons.Default.Tune, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "高级调用路由",
+                    modifier = Modifier.weight(1f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                )
+                Text(
+                    if (assignedStageCount == 0) "默认" else "已分配 $assignedStageCount",
+                    color = if (assignedStageCount == 0) DimText else PrimaryPink,
+                    fontSize = 12.sp
+                )
             }
 
             HorizontalDivider(color = SurfaceLight)
@@ -336,6 +362,159 @@ fun ApiSetupScreen(
             containerColor = PanelBg,
             shape = RoundedCornerShape(8.dp)
         )
+    }
+
+    if (showRoutingDialog) {
+        ApiStageRoutingDialog(
+            profiles = state.profiles,
+            routes = state.apiStageRoutes.routes,
+            enabled = !isConnectionBusy,
+            onSelect = viewModel::assignProfileToStage,
+            onDismiss = {
+                if (!isConnectionBusy) showRoutingDialog = false
+            }
+        )
+    }
+}
+
+private data class StageRouteSpec(
+    val stage: AiCallStage,
+    val title: String,
+    val subtitle: String
+)
+
+private val stageRouteSpecs = listOf(
+    StageRouteSpec(AiCallStage.STORY_IMPORT, "故事识别", "解析世界、角色与开局"),
+    StageRouteSpec(AiCallStage.CHARACTER_SETUP, "角色设定", "确认与修改主角"),
+    StageRouteSpec(AiCallStage.NARRATIVE, "剧情正文", "生成每轮主要叙事"),
+    StageRouteSpec(AiCallStage.NARRATIVE_REPAIR, "剧情修订", "补全格式与质量重写"),
+    StageRouteSpec(AiCallStage.TASK_ASSIGNMENT, "状态分析", "任务、世界与事件变化"),
+    StageRouteSpec(AiCallStage.CHARACTER_STATE, "角色刷新", "更新 NPC 角色卡")
+)
+
+@Composable
+private fun ApiStageRoutingDialog(
+    profiles: List<ApiProfile>,
+    routes: Map<String, String>,
+    enabled: Boolean,
+    onSelect: (AiCallStage, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("高级调用路由", color = PrimaryPink) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "未指定的环节使用当前默认配置。",
+                    color = DimText,
+                    fontSize = 12.sp
+                )
+                stageRouteSpecs.forEach { spec ->
+                    StageProfileSelector(
+                        spec = spec,
+                        selectedProfileName = routes[spec.stage.storageKey].orEmpty(),
+                        profiles = profiles,
+                        enabled = enabled,
+                        onSelect = { profileName -> onSelect(spec.stage, profileName) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, enabled = enabled) {
+                Text("完成", color = PrimaryPink)
+            }
+        },
+        containerColor = PanelBg,
+        shape = RoundedCornerShape(8.dp)
+    )
+}
+
+@Composable
+private fun StageProfileSelector(
+    spec: StageRouteSpec,
+    selectedProfileName: String,
+    profiles: List<ApiProfile>,
+    enabled: Boolean,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(spec.title, color = BrightText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(spec.subtitle, color = DimText, fontSize = 11.sp)
+            }
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    enabled = enabled,
+                    modifier = Modifier.widthIn(min = 132.dp, max = 180.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        selectedProfileName.ifBlank { "默认配置" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.ArrowDropDown, null, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    containerColor = PanelBg
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("默认配置", color = BrightText) },
+                        trailingIcon = {
+                            if (selectedProfileName.isBlank()) {
+                                Icon(Icons.Default.Check, null, tint = PrimaryPink)
+                            }
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect("")
+                        }
+                    )
+                    profiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    profile.name,
+                                    color = BrightText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            trailingIcon = {
+                                if (selectedProfileName == profile.name) {
+                                    Icon(Icons.Default.Check, null, tint = PrimaryPink)
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                onSelect(profile.name)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        HorizontalDivider(color = SurfaceLight.copy(alpha = 0.7f))
     }
 }
 

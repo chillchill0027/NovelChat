@@ -81,4 +81,18 @@ class ConversationListItemPolicyTest {
             ConversationListItemPolicy.preview(ConversationEntry())
         )
     }
+
+    @Test
+    fun contextAndPreview_hideInternalMigrationLabels() {
+        val entry = ConversationEntry(
+            characterDesc = "旧版测试故事，已迁移为通用叙事开局。",
+            lastMessage = "旧版测试记录，建议重新开始剧情"
+        )
+
+        assertEquals("互动故事", ConversationListItemPolicy.context(entry))
+        assertEquals(
+            "还没有剧情，点击进入故事",
+            ConversationListItemPolicy.preview(entry)
+        )
+    }
 }

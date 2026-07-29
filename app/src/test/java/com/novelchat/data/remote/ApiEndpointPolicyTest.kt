@@ -21,15 +21,15 @@ class ApiEndpointPolicyTest {
 
     @Test
     fun validation_allowsUnkeyedLanHttpAndKeyedLoopbackHttp() {
-        assertNull(ApiEndpointPolicy.validationError("http://192.168.1.21:1234", "", "local"))
+        assertNull(ApiEndpointPolicy.validationError("http://192.168.31.84:1234", "", "local"))
         assertNull(ApiEndpointPolicy.validationError("http://127.0.0.1:1234", "local-token", "local"))
         assertNull(ApiEndpointPolicy.validationError("http://[::1]:1234", "local-token", "local"))
     }
 
     @Test
     fun validation_acceptsArbitraryLmStudioModelIdentifiers() {
-        assertNull(ApiEndpointPolicy.validationError("http://192.168.1.21:1234/v1", "", "gamma4 e4b"))
-        assertNull(ApiEndpointPolicy.validationError("http://192.168.1.21:1234/v1", "", "qwen3.5 4b"))
+        assertNull(ApiEndpointPolicy.validationError("http://192.168.31.84:1234/v1", "", "gamma4 e4b"))
+        assertNull(ApiEndpointPolicy.validationError("http://192.168.31.84:1234/v1", "", "qwen3.5 4b"))
     }
 
     @Test
@@ -50,7 +50,7 @@ class ApiEndpointPolicyTest {
     @Test
     fun validation_rejectsKeyOverLanHttp() {
         val error = ApiEndpointPolicy.validationError(
-            "http://192.168.1.21:1234",
+            "http://192.168.31.84:1234",
             "secret",
             "model"
         )
@@ -79,5 +79,17 @@ class ApiEndpointPolicyTest {
         assertTrue(ApiEndpointPolicy.isLocalEndpoint("http://172.20.1.4:8080"))
         assertTrue(ApiEndpointPolicy.isLocalEndpoint("http://[fd00::12]:8080"))
         assertFalse(ApiEndpointPolicy.isLocalEndpoint("https://api.deepseek.com"))
+    }
+
+    @Test
+    fun readTimeout_allowsSlowLocalGenerationWithoutDelayingCloudFailures() {
+        assertEquals(
+            900L,
+            ApiEndpointPolicy.readTimeoutSeconds("http://192.168.31.79:1234")
+        )
+        assertEquals(
+            180L,
+            ApiEndpointPolicy.readTimeoutSeconds("https://api.deepseek.com")
+        )
     }
 }

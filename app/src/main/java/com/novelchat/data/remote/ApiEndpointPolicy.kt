@@ -6,6 +6,8 @@ internal object ApiEndpointPolicy {
     const val MAX_BASE_URL_LENGTH = 2_048
     const val MAX_API_KEY_LENGTH = 4_096
     const val MAX_MODEL_LENGTH = 256
+    const val REMOTE_READ_TIMEOUT_SECONDS = 180L
+    const val LOCAL_READ_TIMEOUT_SECONDS = 900L
 
     fun validationError(baseUrl: String, apiKey: String, model: String): String? {
         val normalizedUrl = baseUrl.trim()
@@ -59,6 +61,9 @@ internal object ApiEndpointPolicy {
         val host = runCatching { URI(baseUrl.trim()).host.orEmpty() }.getOrDefault("")
         return isLocalNetworkHost(normalizeHost(host))
     }
+
+    fun readTimeoutSeconds(baseUrl: String): Long =
+        if (isLocalEndpoint(baseUrl)) LOCAL_READ_TIMEOUT_SECONDS else REMOTE_READ_TIMEOUT_SECONDS
 
     private fun isLocalNetworkHost(host: String): Boolean {
         if (host.isBlank()) return false

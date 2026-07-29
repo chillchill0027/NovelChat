@@ -2,6 +2,8 @@
 
 AI 驱动的互动叙事引擎。Android 原生应用。
 
+当前版本：`1.0.1`
+
 ## 快速开始
 
 ### 前置要求
@@ -54,6 +56,7 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 
 - 主角和 NPC 在剧情中使用姓名交流，身份作为辅助信息展示；旧存档中的“邻居A”等占位称呼会稳定映射为不同姓名
 - 用户输入的连续动作会按原顺序扩写为场景、反馈和人物反应，并主动续写一个合理后果或新情节
+- 每轮行动支持复制、修改和重新生成；新旧存档都会回到目标轮开始前原位重建，并替换该轮之后的旧分支
 - 主角卡首页聚焦体力、压力和风险，NPC 卡首页聚焦关系阶段、情绪、健康与信任；高频波动明细放在详情页
 - 生成过程中返回会先确认是否停止，状态落盘阶段会阻止误退出；临时网络错误会在正文开始前有限重试
 - 损坏的关键存档会显示恢复警告且不会被空默认值覆盖；服务端错误会脱敏并限制长度后再展示
@@ -108,10 +111,9 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
   └── narrative/             # 正文剧情
 ```
 
-## 故事接入文档
+## 设计文档
 
-高级世界设定、角色设定和故事导入规范见
-[`docs/ADVANCED_STORY_IMPORT_GUIDE.md`](docs/ADVANCED_STORY_IMPORT_GUIDE.md)。
+详见 [`docs/TECH_DESIGN_V1.md`](docs/TECH_DESIGN_V1.md)、[`DEVELOPMENT_STATUS.md`](DEVELOPMENT_STATUS.md) 和 [`AGENTS.md`](AGENTS.md)。
 
 ## 开发
 
@@ -122,13 +124,3 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 # 仅编译 Kotlin（跳过 lint 和测试）
 ./gradlew app:compileDebugKotlin -x lint -x test
 ```
-
-完整验证：
-
-```bash
-./gradlew testDebugUnitTest lintDebug assembleDebug
-```
-
-## 许可证
-
-本项目采用 [MIT License](LICENSE)，可自由使用、修改和分发；保留许可证与版权声明即可。

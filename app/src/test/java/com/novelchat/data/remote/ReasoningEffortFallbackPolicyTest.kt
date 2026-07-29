@@ -10,7 +10,7 @@ class ReasoningEffortFallbackPolicyTest {
     fun retry_acceptsLocalServerUnsupportedParameterError() {
         assertTrue(
             ReasoningEffortFallbackPolicy.shouldRetryWithoutReasoningEffort(
-                baseUrl = "http://192.168.1.20:1234/v1",
+                baseUrl = "http://192.168.31.79:1234/v1",
                 statusCode = 400,
                 errorBody = "reasoning_effort is an unsupported parameter"
             )
@@ -39,14 +39,14 @@ class ReasoningEffortFallbackPolicyTest {
         )
         assertFalse(
             ReasoningEffortFallbackPolicy.shouldRetryWithoutReasoningEffort(
-                baseUrl = "http://192.168.1.20:1234/v1",
+                baseUrl = "http://192.168.31.79:1234/v1",
                 statusCode = 401,
                 errorBody = "reasoning_effort is unsupported"
             )
         )
         assertFalse(
             ReasoningEffortFallbackPolicy.shouldRetryWithoutReasoningEffort(
-                baseUrl = "http://192.168.1.20:1234/v1",
+                baseUrl = "http://192.168.31.79:1234/v1",
                 statusCode = 400,
                 errorBody = "model not found"
             )

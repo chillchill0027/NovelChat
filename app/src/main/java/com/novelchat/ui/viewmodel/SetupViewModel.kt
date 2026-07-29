@@ -5,11 +5,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.novelchat.NovelChatApp
 import com.novelchat.data.model.*
+import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.ApiEndpointPolicy
 import com.novelchat.data.remote.model.ChatMessage
 import com.novelchat.data.remote.model.ParsedWorldbookItem
 import com.novelchat.data.remote.model.StoryParseResult
 import com.novelchat.data.remote.model.ApiProfile
+import com.novelchat.data.remote.model.ApiStageRoutes
 import com.novelchat.data.storage.SettingsRepository
 import com.novelchat.domain.parser.JsonResponseParser
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,7 @@ data class SetupState(
     val model: String = SettingsRepository.DEFAULT_MODEL,
     val profileName: String = "",
     val profiles: List<ApiProfile> = emptyList(),
+    val apiStageRoutes: ApiStageRoutes = ApiStageRoutes(),
     val isTesting: Boolean = false,
     val isContinuing: Boolean = false,
     val isProfileMutating: Boolean = false,
@@ -63,6 +66,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 _state.value = _state.value.copy(
                     profiles = settingsRepository.getApiProfiles(),
+                    apiStageRoutes = settingsRepository.getApiStageRoutes(),
                     profileName = settingsRepository.getCurrentProfileName(),
                     apiUrl = SetupFlowPolicy.normalizeApiUrlDraft(settingsRepository.apiBaseUrl.first()),
                     apiKey = SetupFlowPolicy.normalizeApiKeyDraft(settingsRepository.apiKey.first()),
@@ -144,11 +148,35 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.deleteApiProfile(name)
                 _state.value = _state.value.copy(
                     profiles = settingsRepository.getApiProfiles(),
+                    apiStageRoutes = settingsRepository.getApiStageRoutes(),
                     profileName = settingsRepository.getCurrentProfileName()
                 )
             } catch (e: Exception) {
                 e.rethrowCancellation()
                 showSetupError(UserVisibleTextPolicy.failure("配置删除失败", e.message))
+            } finally {
+                _state.value = _state.value.copy(isProfileMutating = false)
+            }
+        }
+    }
+
+    fun assignProfileToStage(stage: AiCallStage, profileName: String) {
+        if (isConnectionBusy()) return
+        val normalizedName = profileName.trim()
+        if (normalizedName.isNotBlank() && _state.value.profiles.none { it.name == normalizedName }) {
+            showConfigurationError("指定的 API 配置不存在")
+            return
+        }
+        _state.value = _state.value.copy(isProfileMutating = true, testResult = null)
+        viewModelScope.launch {
+            try {
+                settingsRepository.saveApiStageRoute(stage, normalizedName)
+                _state.value = _state.value.copy(
+                    apiStageRoutes = settingsRepository.getApiStageRoutes()
+                )
+            } catch (e: Exception) {
+                e.rethrowCancellation()
+                showSetupError(UserVisibleTextPolicy.failure("调用路由保存失败", e.message))
             } finally {
                 _state.value = _state.value.copy(isProfileMutating = false)
             }
@@ -343,7 +371,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                         messages = listOf(ChatMessage(role = "user", content = prompt)),
                         temperature = 0.2f,
                         maxTokens = 4200,
-                        jsonMode = true
+                        jsonMode = true,
+                        stage = AiCallStage.STORY_IMPORT
                     )
                     var candidate = jsonParser.parseStoryParseResult(response)
                     StoryParseQualityPolicy.qualityIssue(candidate)?.let { issue ->
@@ -354,7 +383,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                             )),
                             temperature = 0.1f,
                             maxTokens = 4800,
-                            jsonMode = true
+                            jsonMode = true,
+                            stage = AiCallStage.STORY_IMPORT
                         )
                         candidate = jsonParser.parseStoryParseResult(response)
                     }

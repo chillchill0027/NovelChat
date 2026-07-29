@@ -65,6 +65,26 @@ class ConversationIndexPolicyTest {
         assertEquals("我先去地铁站", ConversationIndexPolicy.preview(narrative))
     }
 
+    @Test
+    fun updateAfterRollbackToOpening_clearsFuturePreview() {
+        val original = ConversationEntry(
+            id = 7,
+            messageCount = 3,
+            lastMessage = "未来分支内容"
+        )
+
+        val updated = ConversationIndexPolicy.updateAfterRound(
+            entries = listOf(original),
+            characterId = 7,
+            latestNarrative = null,
+            round = 0,
+            now = "2026-07-29T10:00:00"
+        ).single()
+
+        assertEquals(0, updated.messageCount)
+        assertEquals("", updated.lastMessage)
+    }
+
     private fun entry(
         id: Long,
         created: String = "2026-07-08T07:00:00",

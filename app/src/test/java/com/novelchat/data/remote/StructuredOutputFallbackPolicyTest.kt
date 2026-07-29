@@ -10,7 +10,7 @@ class StructuredOutputFallbackPolicyTest {
     fun retry_acceptsLmStudioUnsupportedResponseFormatError() {
         assertTrue(
             StructuredOutputFallbackPolicy.shouldRetryWithoutJsonMode(
-                baseUrl = "http://192.168.1.21:1234/v1",
+                baseUrl = "http://192.168.31.84:1234/v1",
                 statusCode = 400,
                 errorBody = "response_format is unsupported for this model"
             )
@@ -32,7 +32,7 @@ class StructuredOutputFallbackPolicyTest {
     fun retry_acceptsLmStudioJsonSchemaOrTextTypeRequirement() {
         assertTrue(
             StructuredOutputFallbackPolicy.shouldRetryWithoutJsonMode(
-                baseUrl = "http://192.168.1.20:1234",
+                baseUrl = "http://192.168.31.79:1234",
                 statusCode = 400,
                 errorBody = "{\"error\":\"'response_format.type' must be 'json_schema' or 'text'\"}"
             )
@@ -43,7 +43,7 @@ class StructuredOutputFallbackPolicyTest {
     fun retry_acceptsLocalServerThatRejectsJsonSchema() {
         assertTrue(
             StructuredOutputFallbackPolicy.shouldRetryWithoutJsonMode(
-                baseUrl = "http://192.168.1.20:11434/v1",
+                baseUrl = "http://192.168.31.79:11434/v1",
                 statusCode = 400,
                 errorBody = "json_schema is unsupported"
             )
@@ -68,14 +68,14 @@ class StructuredOutputFallbackPolicyTest {
         )
         assertFalse(
             StructuredOutputFallbackPolicy.shouldRetryWithoutJsonMode(
-                baseUrl = "http://192.168.1.21:1234/v1",
+                baseUrl = "http://192.168.31.84:1234/v1",
                 statusCode = 404,
                 errorBody = "model not found"
             )
         )
         assertFalse(
             StructuredOutputFallbackPolicy.shouldRetryWithoutJsonMode(
-                baseUrl = "http://192.168.1.21:1234/v1",
+                baseUrl = "http://192.168.31.84:1234/v1",
                 statusCode = 401,
                 errorBody = "response_format is unsupported"
             )

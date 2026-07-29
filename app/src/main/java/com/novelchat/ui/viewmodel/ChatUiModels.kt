@@ -17,12 +17,14 @@ data class ChatUiState(
     val currentRound: Int = 0,
     val statusText: String = "",
     val errorMessage: String? = null,
-    val lastFailedAction: String? = null
+    val lastFailedAction: String? = null,
+    val regeneratableTurns: Set<Int> = emptySet()
 )
 
 data class ChatMessageItem(
     val turn: Int,
     val role: String,
     val content: String,
-    val isStreaming: Boolean = false
+    val isStreaming: Boolean = false,
+    val canRegenerate: Boolean = false
 )

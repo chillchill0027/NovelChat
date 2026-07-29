@@ -8,9 +8,9 @@ internal object ChatRequestPolicy {
     fun reasoningEffort(baseUrl: String, model: String): String? {
         if (!ApiEndpointPolicy.isLocalEndpoint(baseUrl)) return null
         val normalizedModel = model.trim().lowercase()
-        val isControllableReasoningModel = localReasoningModelMarkers.any(
-            normalizedModel::contains
-        )
+        val isControllableReasoningModel =
+            normalizedModel == "qwen" ||
+                localReasoningModelMarkers.any(normalizedModel::contains)
         return "none".takeIf { isControllableReasoningModel }
     }
 

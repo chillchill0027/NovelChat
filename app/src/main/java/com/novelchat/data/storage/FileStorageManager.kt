@@ -51,6 +51,9 @@ class FileStorageManager(private val context: Context) {
     private fun getNarrativeDir(characterId: Long): File =
         File(getBaseDir(characterId), "narrative")
 
+    private fun getRoundCheckpointDir(characterId: Long): File =
+        File(getBaseDir(characterId), "checkpoints")
+
     private fun getInventoryTransferDir(characterId: Long): File =
         File(getBaseDir(characterId), "transactions/inventory")
 
@@ -82,6 +85,7 @@ class FileStorageManager(private val context: Context) {
         }
         getSummaryDir(characterId).mkdirs()
         getNarrativeDir(characterId).mkdirs()
+        getRoundCheckpointDir(characterId).mkdirs()
         getInventoryTransferDir(characterId).mkdirs()
         getStateMutationDir(characterId).mkdirs()
         if (AtomicTextFile.readOrNull(getStatesFile(characterId)) == null) {
@@ -218,6 +222,139 @@ class FileStorageManager(private val context: Context) {
 
     suspend fun saveStoryState(characterId: Long, state: StoryState) = withContext(Dispatchers.IO) {
         AtomicTextFile.write(getStatesFile(characterId), gson.toJson(state))
+    }
+
+    // ========== 轮次重生成检查点 ==========
+
+    suspend fun saveNextRoundCheckpointIfAbsent(characterId: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val storyState = loadStoryState(characterId)
+            val nextRound = maxOf(
+                storyState.currentRound,
+                loadAllNarratives(characterId).maxOfOrNull { it.turn } ?: 0
+            ) + 1
+            saveRoundCheckpointIfAbsent(
+                characterId = characterId,
+                checkpoint = RoundCheckpoint(
+                    round = nextRound,
+                    storyState = storyState,
+                    playerState = loadPlayerState(characterId)
+                        ?: PlayerState(name = CharacterNamingPolicy.DEFAULT_PLAYER_NAME),
+                    characterCards = loadAllCharacterCards(characterId),
+                    worldbookEntries = loadAllWorldbookEntries(characterId),
+                    createdAt = getCurrentTimeString()
+                )
+            )
+        }
+
+    suspend fun saveCompatibilityRoundCheckpointIfAbsent(
+        characterId: Long,
+        round: Int,
+        storyState: StoryState
+    ): Boolean = withContext(Dispatchers.IO) {
+        require(round > 0) { "兼容检查点轮次无效" }
+        require(storyState.currentRound < round) { "兼容检查点状态轮次无效" }
+        saveRoundCheckpointIfAbsent(
+            characterId = characterId,
+            checkpoint = RoundCheckpoint(
+                round = round,
+                storyState = storyState,
+                playerState = loadPlayerState(characterId)
+                    ?: PlayerState(name = CharacterNamingPolicy.DEFAULT_PLAYER_NAME),
+                characterCards = loadAllCharacterCards(characterId),
+                worldbookEntries = loadAllWorldbookEntries(characterId),
+                createdAt = getCurrentTimeString()
+            )
+        )
+    }
+
+    suspend fun saveRoundCheckpointIfAbsent(
+        characterId: Long,
+        checkpoint: RoundCheckpoint
+    ): Boolean = withContext(Dispatchers.IO) {
+        require(checkpoint.round > 0) { "检查点轮次无效" }
+        require(checkpoint.storyState.currentRound < checkpoint.round) {
+            "检查点必须保存该轮开始前的状态"
+        }
+        val file = roundCheckpointFile(characterId, checkpoint.round)
+        if (AtomicTextFile.readOrNull(file) != null) {
+            false
+        } else {
+            getRoundCheckpointDir(characterId).mkdirs()
+            AtomicTextFile.write(file, gson.toJson(checkpoint))
+            true
+        }
+    }
+
+    suspend fun loadRoundCheckpointTurns(characterId: Long): Set<Int> =
+        withContext(Dispatchers.IO) {
+            jsonFiles(getRoundCheckpointDir(characterId))
+                .mapNotNull(::turnFromHistoryFile)
+                .filter { it > 0 }
+                .toSet()
+        }
+
+    suspend fun restoreRoundCheckpoint(
+        characterId: Long,
+        round: Int
+    ): RoundCheckpoint = withContext(Dispatchers.IO) {
+        require(round > 0) { "重生成轮次无效" }
+        val checkpointFile = roundCheckpointFile(characterId, round)
+        val json = AtomicTextFile.readOrNull(checkpointFile)
+            ?: throw IllegalStateException("第${round}轮没有可恢复的历史检查点")
+        val checkpoint = storedJsonCodec.decode(
+            json,
+            checkpointFile,
+            RoundCheckpoint::class.java,
+            "轮次检查点"
+        )
+        require(checkpoint.version == RoundCheckpoint.CURRENT_VERSION) {
+            "第${round}轮检查点版本不受支持"
+        }
+        require(checkpoint.round == round && checkpoint.storyState.currentRound < round) {
+            "第${round}轮检查点内容无效"
+        }
+
+        val characterDir = getCharactersDir(characterId)
+        jsonFiles(characterDir)
+            .filter { it.name != "player.json" }
+            .forEach(::deleteRequired)
+        AtomicTextFile.write(
+            File(characterDir, "player.json"),
+            gson.toJson(checkpoint.playerState)
+        )
+        checkpoint.characterCards.forEach { card ->
+            AtomicTextFile.write(
+                File(characterDir, "${CharacterCardFilePolicy.fileStem(card)}.json"),
+                gson.toJson(card)
+            )
+        }
+
+        worldbookSubDirs.forEach { subDir ->
+            jsonFiles(getWorldbookSubDir(characterId, subDir)).forEach(::deleteRequired)
+        }
+        checkpoint.worldbookEntries.forEach { entry ->
+            val normalized = WorldbookContentPolicy.normalize(entry)
+            require(normalized.id.isNotBlank() && normalized.name.isNotBlank()) {
+                "检查点中的世界书条目无效"
+            }
+            AtomicTextFile.write(
+                File(
+                    getWorldbookSubDir(characterId, worldbookSubDir(normalized.type)),
+                    "${safeFileName(normalized.id)}.json"
+                ),
+                gson.toJson(normalized)
+            )
+        }
+
+        AtomicTextFile.write(getStatesFile(characterId), gson.toJson(checkpoint.storyState))
+        deleteHistoryFromRound(getNarrativeDir(characterId), round)
+        deleteHistoryFromRound(getSummaryDir(characterId), round)
+        deleteTransactionsFromRound(characterId, round)
+        jsonFiles(getRoundCheckpointDir(characterId))
+            .filter { (turnFromHistoryFile(it) ?: Int.MIN_VALUE) > round }
+            .forEach(::deleteRequired)
+        checkpoint
     }
 
     // ========== 可恢复库存转移 ==========
@@ -501,11 +638,7 @@ class FileStorageManager(private val context: Context) {
         require(entry.id.isNotBlank()) { "世界书条目标识不能为空" }
         val normalizedEntry = WorldbookContentPolicy.normalize(entry)
         require(normalizedEntry.name.isNotBlank()) { "世界书条目名称不能为空" }
-        val subDir = when (normalizedEntry.type) {
-            "location" -> "locations"; "item" -> "items"
-            "organization" -> "organizations"; "event" -> "events"
-            "character" -> "characters"; else -> "events"
-        }
+        val subDir = worldbookSubDir(normalizedEntry.type)
         val fileName = "${safeFileName(normalizedEntry.id)}.json"
         val target = File(getWorldbookSubDir(characterId, subDir), fileName)
         AtomicTextFile.write(target, gson.toJson(normalizedEntry))
@@ -586,5 +719,59 @@ class FileStorageManager(private val context: Context) {
 
     // ========== 辅助方法 ==========
 
+    private fun roundCheckpointFile(characterId: Long, round: Int): File =
+        File(
+            getRoundCheckpointDir(characterId),
+            String.format(Locale.ROOT, "turn_%03d.json", round)
+        )
+
+    private fun turnFromHistoryFile(file: File): Int? =
+        HISTORY_FILE_PATTERN.matchEntire(file.name)?.groupValues?.get(1)?.toIntOrNull()
+
+    private fun deleteHistoryFromRound(directory: File, round: Int) {
+        jsonFiles(directory)
+            .filter { (turnFromHistoryFile(it) ?: Int.MIN_VALUE) >= round }
+            .forEach(::deleteRequired)
+    }
+
+    private fun deleteTransactionsFromRound(characterId: Long, round: Int) {
+        jsonFiles(getInventoryTransferDir(characterId)).forEach { file ->
+            val journal = storedJsonCodec.decode(
+                AtomicTextFile.read(file),
+                file,
+                InventoryTransferJournal::class.java,
+                "库存转移日志"
+            )
+            if (journal.round >= round) deleteRequired(file)
+        }
+        jsonFiles(getStateMutationDir(characterId)).forEach { file ->
+            val journal = storedJsonCodec.decode(
+                AtomicTextFile.read(file),
+                file,
+                StateMutationJournal::class.java,
+                "状态操作日志"
+            )
+            if (journal.round >= round) deleteRequired(file)
+        }
+    }
+
+    private fun deleteRequired(file: File) {
+        if (file.exists() && !file.delete()) {
+            throw IOException("无法更新故事分支：${file.name}")
+        }
+    }
+
+    private fun worldbookSubDir(type: String): String = when (type) {
+        "location" -> "locations"
+        "item" -> "items"
+        "organization" -> "organizations"
+        "character" -> "characters"
+        else -> "events"
+    }
+
     fun getCurrentTimeString(): String = LocalDateTime.now().format(dateFormatter)
+
+    private companion object {
+        val HISTORY_FILE_PATTERN = Regex("""turn_(\d+)\.json""")
+    }
 }

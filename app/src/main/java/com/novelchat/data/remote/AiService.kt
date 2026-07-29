@@ -1,6 +1,7 @@
 package com.novelchat.data.remote
 
 import android.content.Context
+import android.util.Log
 import com.google.gson.Gson
 import com.novelchat.data.remote.api.OpenAiApi
 import com.novelchat.data.remote.model.ChatMessage
@@ -36,13 +37,20 @@ class AiService(private val context: Context) {
 
     private val gson = Gson()
     private val settingsRepository = SettingsRepository(context)
-    private var currentApi: OpenAiApi? = null
-    private var currentBaseUrl: String? = null
+    private val apiByBaseUrl = mutableMapOf<String, OpenAiApi>()
     private val apiMutex = Mutex()
 
-    suspend fun isLocalEndpointConfigured(): Boolean {
-        return ApiEndpointPolicy.isLocalEndpoint(settingsRepository.apiBaseUrl.first())
+    suspend fun isLocalEndpointConfigured(stage: AiCallStage? = null): Boolean {
+        return ApiEndpointPolicy.isLocalEndpoint(
+            settingsRepository.getApiConnection(stage).baseUrl
+        )
     }
+
+    suspend fun roundRouteLocality(): AiRoundRouteLocality = AiRoundRouteLocality(
+        narrative = isLocalEndpointConfigured(AiCallStage.NARRATIVE),
+        taskAssignment = isLocalEndpointConfigured(AiCallStage.TASK_ASSIGNMENT),
+        characterState = isLocalEndpointConfigured(AiCallStage.CHARACTER_STATE)
+    )
 
     private suspend fun getApi(baseUrlOverride: String? = null): OpenAiApi {
         val configuredBaseUrl = baseUrlOverride?.trim()
@@ -50,14 +58,17 @@ class AiService(private val context: Context) {
         if (configuredBaseUrl.isBlank()) throw Exception("请先在设置中配置 API 地址")
         val baseUrl = ApiEndpointPolicy.normalizeBaseUrl(configuredBaseUrl) + "/"
         return apiMutex.withLock {
-            if (currentApi == null || currentBaseUrl != baseUrl) {
+            apiByBaseUrl[baseUrl] ?: run {
                 val logging = HttpLoggingInterceptor().apply {
                     redactHeader("Authorization")
                     level = HttpLoggingInterceptor.Level.BASIC
                 }
                 val client = OkHttpClient.Builder()
                     .connectTimeout(60, TimeUnit.SECONDS)
-                    .readTimeout(180, TimeUnit.SECONDS)
+                    .readTimeout(
+                        ApiEndpointPolicy.readTimeoutSeconds(baseUrl),
+                        TimeUnit.SECONDS
+                    )
                     .writeTimeout(60, TimeUnit.SECONDS)
                     .followRedirects(false)
                     .followSslRedirects(false)
@@ -70,10 +81,10 @@ class AiService(private val context: Context) {
                     .addConverterFactory(GsonConverterFactory.create(gson))
                     .build()
 
-                currentApi = retrofit.create(OpenAiApi::class.java)
-                currentBaseUrl = baseUrl
+                retrofit.create(OpenAiApi::class.java).also { api ->
+                    apiByBaseUrl[baseUrl] = api
+                }
             }
-            currentApi ?: error("API 客户端初始化失败")
         }
     }
 
@@ -86,11 +97,14 @@ class AiService(private val context: Context) {
         temperature: Float = 0.8f,
         maxTokens: Int? = null,
         jsonMode: Boolean = false,
-        structuredOutputKind: StructuredOutputKind = StructuredOutputKind.GENERIC_OBJECT
+        structuredOutputKind: StructuredOutputKind = StructuredOutputKind.GENERIC_OBJECT,
+        stage: AiCallStage = AiCallStage.NARRATIVE
     ): Flow<String> = flow {
-        val baseUrl = settingsRepository.apiBaseUrl.first().trim()
-        val apiKey = settingsRepository.apiKey.first().trim()
-        val selectedModel = (model ?: settingsRepository.model.first()).trim()
+        val connection = settingsRepository.getApiConnection(stage)
+        val baseUrl = connection.baseUrl.trim()
+        val apiKey = connection.apiKey.trim()
+        val selectedModel = (model ?: connection.model).trim()
+        logRoute(stage, connection.name, selectedModel)
         ApiEndpointPolicy.requireValid(baseUrl, apiKey, selectedModel)
         val api = getApi(baseUrl)
         val authorization = apiKey.takeIf { it.isNotBlank() }?.let { "Bearer $it" }
@@ -184,11 +198,14 @@ class AiService(private val context: Context) {
         temperature: Float = 0.3f,
         maxTokens: Int? = null,
         jsonMode: Boolean = false,
-        structuredOutputKind: StructuredOutputKind = StructuredOutputKind.GENERIC_OBJECT
+        structuredOutputKind: StructuredOutputKind = StructuredOutputKind.GENERIC_OBJECT,
+        stage: AiCallStage? = null
     ): String = withContext(Dispatchers.IO) {
-        val baseUrl = settingsRepository.apiBaseUrl.first().trim()
-        val apiKey = settingsRepository.apiKey.first().trim()
-        val selectedModel = (model ?: settingsRepository.model.first()).trim()
+        val connection = settingsRepository.getApiConnection(stage)
+        val baseUrl = connection.baseUrl.trim()
+        val apiKey = connection.apiKey.trim()
+        val selectedModel = (model ?: connection.model).trim()
+        logRoute(stage, connection.name, selectedModel)
         ApiEndpointPolicy.requireValid(baseUrl, apiKey, selectedModel)
         val api = getApi(baseUrl)
         completeRequest(
@@ -219,7 +236,7 @@ class AiService(private val context: Context) {
             model = model.trim(),
             messages = listOf(ChatMessage(role = "user", content = "只回复 OK，不要解释。")),
             temperature = 0f,
-            maxTokens = 64,
+            maxTokens = 256,
             jsonMode = false
         )
     }
@@ -353,9 +370,21 @@ class AiService(private val context: Context) {
         }
     }
 
+    private fun logRoute(stage: AiCallStage?, profileName: String, model: String) {
+        Log.d(
+            TAG,
+            "AI route stage=${stage?.storageKey ?: "default"}; " +
+                "profile=${profileName.ifBlank { "default" }}; model=$model"
+        )
+    }
+
     private class ApiHttpException(
         val statusCode: Int,
         val responseBody: String?,
         safeMessage: String
     ) : Exception(safeMessage)
+
+    private companion object {
+        const val TAG = "AiService"
+    }
 }

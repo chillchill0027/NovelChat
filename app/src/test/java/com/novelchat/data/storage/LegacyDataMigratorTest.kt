@@ -19,4 +19,14 @@ class LegacyDataMigratorTest {
 
         assertFalse(LegacyDataMigrator.containsLegacyText(modernPreview))
     }
+
+    @Test
+    fun containsLegacyText_detectsInternalMigrationLabels() {
+        assertTrue(
+            LegacyDataMigrator.containsLegacyText(
+                "旧版测试故事，已迁移为通用叙事开局。"
+            )
+        )
+        assertTrue(LegacyDataMigrator.containsLegacyText("旧版测试记录，建议重新开始剧情"))
+    }
 }

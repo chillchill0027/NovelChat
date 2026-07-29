@@ -120,16 +120,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     playerName = playerName
                 )
                 val worldbookEntries = fileStorage.loadActiveWorldbookEntries(targetCharacterId)
-                val messages = narratives.flatMap { n ->
-                    listOf(ChatMessageItem(turn = n.turn, role = "user", content = n.userInput),
-                           ChatMessageItem(turn = n.turn, role = "assistant", content = n.narrative))
-                }
+                val regeneratableTurns =
+                    fileStorage.loadRoundCheckpointTurns(targetCharacterId)
+                val messages = messageItems(narratives, regeneratableTurns)
                 if (characterId != targetCharacterId) return@launch
                 _uiState.value = ChatUiState(
                     messages = messages, playerState = playerState, storyState = storyState,
                     npcCards = npcCards, worldbookEntries = worldbookEntries,
                     currentRound = storyState.currentRound,
-                    isReady = true
+                    isReady = true,
+                    regeneratableTurns = regeneratableTurns
                 )
 
                 // 自动开场白：首次进入且无消息时
@@ -179,18 +179,132 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             statusText = "正在生成..."
         )
         engineJob = viewModelScope.launch {
+            collectRound(targetCharacterId, trimmed, generation)
+        }
+    }
+
+    fun regenerateRound(turn: Int, revisedAction: String) {
+        val cur = _uiState.value
+        if (cur.isStreaming || characterId <= 0L) return
+        val validation = ChatInputPolicy.validate(
+            content = revisedAction,
+            isReady = cur.isReady,
+            pendingSyncRound = null
+        )
+        validation.errorMessage?.let { message ->
+            _uiState.value = cur.copy(errorMessage = message)
+            return
+        }
+        val action = validation.action ?: return
+        engineJob?.cancel()
+        val targetCharacterId = characterId
+        val generation = ++engineGeneration
+        _uiState.value = cur.copy(
+            isStreaming = true,
+            canCancelGeneration = false,
+            errorMessage = null,
+            lastFailedAction = null,
+            statusText = "正在恢复第${turn}轮开始前的状态..."
+        )
+        engineJob = viewModelScope.launch {
             try {
-                gameEngine.executeRound(targetCharacterId, trimmed).collect { event ->
-                    if (characterId == targetCharacterId && engineGeneration == generation) {
-                        handleEvent(event, targetCharacterId, generation)
-                    }
+                if (turn !in cur.regeneratableTurns) {
+                    val currentStory = fileStorage.loadStoryState(targetCharacterId)
+                    val compatibilityState = StateSyncPolicy.clearPending(
+                        currentStory.copy(currentRound = turn - 1)
+                    )
+                    fileStorage.saveCompatibilityRoundCheckpointIfAbsent(
+                        characterId = targetCharacterId,
+                        round = turn,
+                        storyState = compatibilityState
+                    )
                 }
+                fileStorage.restoreRoundCheckpoint(targetCharacterId, turn)
+                val restoredStory = fileStorage.loadStoryState(targetCharacterId)
+                val restoredPlayer = fileStorage.loadPlayerState(targetCharacterId)
+                    ?: throw IllegalStateException("主角检查点缺失")
+                val restoredCards = fileStorage.loadActiveCharacterCards(targetCharacterId)
+                    .map { card -> CharacterProfilePolicy.reconcile(card, restoredPlayer.name) }
+                val restoredWorldbook =
+                    fileStorage.loadActiveWorldbookEntries(targetCharacterId)
+                val narratives = fileStorage.loadAllNarratives(targetCharacterId)
+                val checkpointTurns =
+                    fileStorage.loadRoundCheckpointTurns(targetCharacterId)
+                if (characterId != targetCharacterId || engineGeneration != generation) {
+                    return@launch
+                }
+                _uiState.value = _uiState.value.copy(
+                    messages = messageItems(narratives, checkpointTurns) +
+                        ChatMessageItem(
+                            turn = turn,
+                            role = "user",
+                            content = action,
+                            canRegenerate = true
+                        ),
+                    playerState = restoredPlayer,
+                    storyState = restoredStory,
+                    npcCards = visibleNpcCards(
+                        restoredCards,
+                        restoredStory,
+                        restoredPlayer.name
+                    ),
+                    worldbookEntries = restoredWorldbook,
+                    currentRound = restoredStory.currentRound,
+                    regeneratableTurns = checkpointTurns,
+                    isReady = true,
+                    isStreaming = true,
+                    canCancelGeneration = true,
+                    statusText = "正在重新生成第${turn}轮..."
+                )
+                updateConversationIndex(targetCharacterId, restoredStory.currentRound)
+                collectRound(targetCharacterId, action, generation)
             } catch (_: CancellationException) {
-                // The UI has already replaced the partial response with a retryable message.
+                // Cancellation UI is handled by cancelStream when generation is cancellable.
             } catch (e: Exception) {
                 if (characterId == targetCharacterId && engineGeneration == generation) {
-                    showRoundError("引擎错误：${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        isStreaming = false,
+                        canCancelGeneration = false,
+                        errorMessage = UserVisibleTextPolicy.failure("重新生成失败", e.message),
+                        lastFailedAction = action,
+                        statusText = ""
+                    )
                 }
+            }
+        }
+    }
+
+    private suspend fun collectRound(
+        targetCharacterId: Long,
+        action: String,
+        generation: Long
+    ) {
+        try {
+            val roundEvents = gameEngine.executeRound(targetCharacterId, action)
+            if (characterId == targetCharacterId && engineGeneration == generation) {
+                val targetTurn = _uiState.value.currentRound + 1
+                val updatedTurns = _uiState.value.regeneratableTurns + targetTurn
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { message ->
+                        if (message.turn == targetTurn && message.role == "user") {
+                            message.copy(canRegenerate = true)
+                        } else {
+                            message
+                        }
+                    },
+                    regeneratableTurns = updatedTurns
+                )
+            }
+            roundEvents.collect { event ->
+                if (characterId == targetCharacterId && engineGeneration == generation) {
+                    handleEvent(event, targetCharacterId, generation)
+                }
+            }
+        } catch (_: CancellationException) {
+            // The UI has already replaced the partial response with a retryable message.
+        } catch (e: Exception) {
+            if (characterId == targetCharacterId && engineGeneration == generation) {
+                showRoundError("引擎错误：${e.message}")
             }
         }
     }
@@ -251,16 +365,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         val storedNpcs = fileStorage.loadActiveCharacterCards(targetCharacterId)
                         val narratives = fileStorage.loadAllNarratives(targetCharacterId)
                         val worldbook = fileStorage.loadActiveWorldbookEntries(targetCharacterId)
+                        val regeneratableTurns =
+                            fileStorage.loadRoundCheckpointTurns(targetCharacterId)
                         if (characterId != targetCharacterId || engineGeneration != generation) return@launch
                         val pn = ps?.name ?: ""
                         val npcs = storedNpcs.map { card -> CharacterProfilePolicy.reconcile(card, pn) }
                         _uiState.value = _uiState.value.copy(
-                            messages = narratives.flatMap { n -> listOf(ChatMessageItem(turn = n.turn, role = "user", content = n.userInput), ChatMessageItem(turn = n.turn, role = "assistant", content = n.narrative)) },
+                            messages = messageItems(narratives, regeneratableTurns),
                             playerState = ps,
                             storyState = ss,
                             npcCards = visibleNpcCards(npcs, ss, pn),
                             worldbookEntries = worldbook,
                             currentRound = event.round,
+                            regeneratableTurns = regeneratableTurns,
                             isStreaming = false,
                             canCancelGeneration = false,
                             lastFailedAction = null,
@@ -342,6 +459,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 (left.id.isNotBlank() && right.id.isNotBlank() && left.id == right.id)
     }
 
+    private fun messageItems(
+        narratives: List<NarrativeEntry>,
+        regeneratableTurns: Set<Int>
+    ): List<ChatMessageItem> = narratives.flatMap { narrative ->
+        val canRegenerate = narrative.turn in regeneratableTurns
+        listOf(
+            ChatMessageItem(
+                turn = narrative.turn,
+                role = "user",
+                content = narrative.userInput,
+                canRegenerate = canRegenerate
+            ),
+            ChatMessageItem(
+                turn = narrative.turn,
+                role = "assistant",
+                content = narrative.narrative,
+                canRegenerate = canRegenerate
+            )
+        )
+    }
+
     private suspend fun updateConversationIndex(targetCharacterId: Long, round: Int) {
         try {
             val latest = fileStorage.loadAllNarratives(targetCharacterId).lastOrNull()
@@ -381,7 +519,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     ChatMessageItem(
                         turn = cur.currentRound + 1,
                         role = "user",
-                        content = action
+                        content = action,
+                        canRegenerate = cur.currentRound + 1 in cur.regeneratableTurns
                     )
                 },
                 ChatMessageItem(

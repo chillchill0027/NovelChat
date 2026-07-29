@@ -43,7 +43,11 @@ object ConversationIndexPolicy {
 
         val updated = entries[index].copy(
             lastMessageAt = now,
-            lastMessage = preview(latestNarrative).ifBlank { entries[index].lastMessage },
+            lastMessage = when {
+                latestNarrative != null -> preview(latestNarrative)
+                round <= 0 -> ""
+                else -> entries[index].lastMessage
+            },
             messageCount = round
         )
         return listOf(updated) + entries.filterIndexed { itemIndex, _ -> itemIndex != index }
