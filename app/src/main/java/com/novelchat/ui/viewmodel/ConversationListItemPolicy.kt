@@ -15,6 +15,8 @@ object ConversationListItemPolicy {
 
     fun context(entry: ConversationEntry): String {
         return entry.characterDesc
+            .takeUnless(::isInternalMigrationText)
+            .orEmpty()
             .replace(whitespace, " ")
             .trim()
             .ifBlank { "互动故事" }
@@ -22,6 +24,8 @@ object ConversationListItemPolicy {
 
     fun preview(entry: ConversationEntry): String {
         return entry.lastMessage
+            .takeUnless(::isInternalMigrationText)
+            .orEmpty()
             .replace(whitespace, " ")
             .trim()
             .ifBlank { "还没有剧情，点击进入故事" }
@@ -55,4 +59,9 @@ object ConversationListItemPolicy {
             else -> value.format(fullDateFormatter)
         }
     }
+
+    private fun isInternalMigrationText(value: String): Boolean =
+        value.contains("旧版测试故事") ||
+            value.contains("旧版测试记录") ||
+            value.contains("已迁移为通用叙事开局")
 }

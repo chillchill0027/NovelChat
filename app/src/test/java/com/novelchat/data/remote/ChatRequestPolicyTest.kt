@@ -7,11 +7,11 @@ import org.junit.Test
 class ChatRequestPolicyTest {
 
     @Test
-    fun reasoningEffort_disablesThinkingForLocalGemma4AndQwen3Models() {
+    fun reasoningEffort_disablesThinkingForLocalGemma4QwenAliasAndQwen3Models() {
         assertEquals(
             "none",
             ChatRequestPolicy.reasoningEffort(
-                baseUrl = "http://192.168.1.20:1234/v1",
+                baseUrl = "http://192.168.31.79:1234/v1",
                 model = "gemma4"
             )
         )
@@ -20,6 +20,13 @@ class ChatRequestPolicyTest {
             ChatRequestPolicy.reasoningEffort(
                 baseUrl = "http://127.0.0.1:1234",
                 model = "gemma-4-e4b-uncensored"
+            )
+        )
+        assertEquals(
+            "none",
+            ChatRequestPolicy.reasoningEffort(
+                baseUrl = "http://10.0.2.2:1234/v1",
+                model = "qwen"
             )
         )
         assertEquals(
@@ -41,7 +48,7 @@ class ChatRequestPolicyTest {
         )
         assertNull(
             ChatRequestPolicy.reasoningEffort(
-                baseUrl = "http://192.168.1.20:1234/v1",
+                baseUrl = "http://192.168.31.79:1234/v1",
                 model = "llama-3.3-70b"
             )
         )

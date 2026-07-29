@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.novelchat.data.remote.CompletionLengthException
 import com.novelchat.data.model.*
+import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.AiService
 import com.novelchat.data.remote.StructuredOutputKind
 import com.novelchat.data.remote.model.ChatMessage
@@ -41,7 +42,13 @@ class RpgGameEngine(
     suspend fun executeRound(
         characterId: Long,
         userMessage: String
-    ): Flow<GameEvent> = execute(characterId, userMessage, stateSyncOnly = false)
+    ): Flow<GameEvent> {
+        check(fileStorage.isInitialized(characterId)) {
+            "故事存档不存在或尚未完成初始化"
+        }
+        fileStorage.saveNextRoundCheckpointIfAbsent(characterId)
+        return execute(characterId, userMessage, stateSyncOnly = false)
+    }
 
     suspend fun retryPendingStateSync(characterId: Long): Flow<GameEvent> =
         execute(characterId, userMessage = "", stateSyncOnly = true)
@@ -54,7 +61,7 @@ class RpgGameEngine(
         check(fileStorage.isInitialized(characterId)) {
             "故事存档不存在或尚未完成初始化"
         }
-        val isLocalEndpoint = aiService.isLocalEndpointConfigured()
+        val routeLocality = aiService.roundRouteLocality()
 
         // ========== 步骤1-4：读取所有状态 ==========
         emit(GameEvent.Loading("正在读取游戏状态..."))
@@ -178,12 +185,9 @@ class RpgGameEngine(
             narrativeBuilder.append(syncOnlyEntry.narrative)
             emit(GameEvent.Loading("正在重新同步第${syncOnlyEntry.turn}轮状态..."))
         } else try {
-            aiService.chatStream(
+            requestNarrative(
                 narrativeMessages,
-                temperature = if (isLocalEndpoint) 0.55f else 0.72f,
-                maxTokens = 4800,
-                jsonMode = true,
-                structuredOutputKind = StructuredOutputKind.NARRATIVE
+                temperature = if (routeLocality.narrative) 0.55f else 0.72f
             ).collect { chunk ->
                 narrativeBuilder.append(chunk)
                 val preview = NarrativeStreamPreviewPolicy.extract(narrativeBuilder.toString())
@@ -208,13 +212,7 @@ class RpgGameEngine(
                         issue = "上一次输出被长度上限截断，请重建完整 JSON，并保留全部动作与后续剧情。"
                     )
                 }
-                val retryResponse = aiService.chatComplete(
-                    messages = listOf(ChatMessage(role = "user", content = retryPrompt)),
-                    temperature = 0.55f,
-                    maxTokens = 4800,
-                    jsonMode = true,
-                    structuredOutputKind = StructuredOutputKind.NARRATIVE
-                )
+                val retryResponse = requestNarrativeRepair(retryPrompt, temperature = 0.55f)
                 narrativeBuilder.clear()
                 narrativeBuilder.append(retryResponse)
             } catch (retryError: CancellationException) {
@@ -255,19 +253,13 @@ class RpgGameEngine(
             Log.w(TAG, "Narrative JSON parse failed; requesting a repaired response; type=${e.logType()}")
             emit(GameEvent.Loading("正在修复剧情格式..."))
             try {
-                narrativeResponse = aiService.chatComplete(
-                    messages = listOf(ChatMessage(
-                        role = "user",
-                        content = promptBuilder.buildNarrativeRepairPrompt(
-                            originalPrompt = narrativePrompt,
-                            rawResponse = narrativeResponse,
-                            issue = "上一次输出不是可解析的完整 JSON；请重建全部字段，不要遗漏正文"
-                        )
-                    )),
-                    temperature = 0.45f,
-                    maxTokens = 4800,
-                    jsonMode = true,
-                    structuredOutputKind = StructuredOutputKind.NARRATIVE
+                narrativeResponse = requestNarrativeRepair(
+                    prompt = promptBuilder.buildNarrativeRepairPrompt(
+                        originalPrompt = narrativePrompt,
+                        rawResponse = narrativeResponse,
+                        issue = "上一次输出不是可解析的完整 JSON；请重建全部字段，不要遗漏正文"
+                    ),
+                    temperature = 0.45f
                 )
                 NarrativeIdentityAnchorPolicy.apply(
                     result = NarrativeResultContentPolicy.normalize(
@@ -349,15 +341,9 @@ class RpgGameEngine(
                         issue = narrativeIssue
                     )
                 }
-                val repairedResponse = aiService.chatComplete(
-                    messages = listOf(ChatMessage(
-                        role = "user",
-                        content = repairPrompt
-                    )),
-                    temperature = if (styleOnlyRepair) 0.25f else 0.55f,
-                    maxTokens = 4800,
-                    jsonMode = true,
-                    structuredOutputKind = StructuredOutputKind.NARRATIVE
+                val repairedResponse = requestNarrativeRepair(
+                    prompt = repairPrompt,
+                    temperature = if (styleOnlyRepair) 0.25f else 0.55f
                 )
                 val repairedResult = NarrativeIdentityAnchorPolicy.apply(
                     result = NarrativeResultContentPolicy.normalize(
@@ -505,7 +491,11 @@ class RpgGameEngine(
         )
 
         val taskAssignment = try {
-            requestTaskAssignment(taskPrompt, essentialTaskPrompt, isLocalEndpoint) { assignment ->
+            requestTaskAssignment(
+                taskPrompt,
+                essentialTaskPrompt,
+                routeLocality.taskAssignment
+            ) { assignment ->
                 assignment
                 .let { candidate ->
                     EndingScenePolicy.reconcile(
@@ -659,7 +649,7 @@ class RpgGameEngine(
             }
             normalizedNewCharacterNames[newChar.name] = initialCard.name
 
-            if (isLocalEndpoint) {
+            if (routeLocality.characterState) {
                 Log.d(TAG, "New character initialized from compact local state sync")
                 if (existingCard == null) emit(GameEvent.CharacterUpdated(initialCard))
             } else {
@@ -860,6 +850,30 @@ class RpgGameEngine(
     }.flowOn(Dispatchers.IO)
 
     // ========== 辅助方法 ==========
+
+    private fun requestNarrative(
+        messages: List<ChatMessage>,
+        temperature: Float
+    ): Flow<String> = aiService.chatStream(
+        messages = messages,
+        temperature = temperature,
+        maxTokens = 4800,
+        jsonMode = true,
+        structuredOutputKind = StructuredOutputKind.NARRATIVE,
+        stage = AiCallStage.NARRATIVE
+    )
+
+    private suspend fun requestNarrativeRepair(
+        prompt: String,
+        temperature: Float
+    ): String = aiService.chatComplete(
+        messages = listOf(ChatMessage(role = "user", content = prompt)),
+        temperature = temperature,
+        maxTokens = 4800,
+        jsonMode = true,
+        structuredOutputKind = StructuredOutputKind.NARRATIVE,
+        stage = AiCallStage.NARRATIVE_REPAIR
+    )
 
     private suspend fun applyWorldbookUpdates(
         characterId: Long,
@@ -1483,7 +1497,8 @@ class RpgGameEngine(
                 listOf(ChatMessage(role = "user", content = prompt)),
                 temperature = 0.2f,
                 maxTokens = maxTokens,
-                jsonMode = true
+                jsonMode = true,
+                stage = AiCallStage.CHARACTER_STATE
             )
             jsonParser.parseCharacterStatePatch(response)
         }
@@ -1514,7 +1529,8 @@ class RpgGameEngine(
                         TaskAssignmentPromptMode.REPAIR -> 2800
                         TaskAssignmentPromptMode.ESSENTIAL -> 1800
                     },
-                    jsonMode = true
+                    jsonMode = true,
+                    stage = AiCallStage.TASK_ASSIGNMENT
                 )
                 return TaskAssignmentQualityPolicy.requireMeaningful(
                     normalize(jsonParser.parseTaskAssignment(response))

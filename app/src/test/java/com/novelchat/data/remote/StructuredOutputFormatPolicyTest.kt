@@ -22,7 +22,7 @@ class StructuredOutputFormatPolicyTest {
     @Test
     fun responseFormat_usesPermissiveObjectSchemaForLocalStructuredCalls() {
         val format = StructuredOutputFormatPolicy.responseFormat(
-            baseUrl = "http://192.168.1.20:1234/v1"
+            baseUrl = "http://192.168.31.79:1234/v1"
         )
         val definition = requireNotNull(format.jsonSchema)
 

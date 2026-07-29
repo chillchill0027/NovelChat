@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.model.ApiProfile
+import com.novelchat.data.remote.model.ApiStageRoutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -18,6 +20,7 @@ class SettingsRepository(private val context: Context) {
 
     private val credentialCipher = CredentialCipher()
     private val profileCodec = ApiProfileCredentialCodec(credentialCipher)
+    private val stageRoutesCodec = ApiStageRoutesCodec()
 
     companion object {
         const val DEFAULT_API_BASE_URL = "https://api.deepseek.com"
@@ -28,6 +31,7 @@ class SettingsRepository(private val context: Context) {
         private val MODEL = stringPreferencesKey("model")
         private val API_PROFILES = stringPreferencesKey("api_profiles")
         private val CURRENT_PROFILE = stringPreferencesKey("current_profile")
+        private val API_STAGE_ROUTES = stringPreferencesKey("api_stage_routes")
     }
 
     // ========== 单配置模式（向后兼容） ==========
@@ -91,6 +95,10 @@ class SettingsRepository(private val context: Context) {
             val profiles = profileCodec.decode(preferences[API_PROFILES].orEmpty()).toMutableList()
             profiles.removeAll { it.name == name }
             preferences[API_PROFILES] = profileCodec.encode(profiles)
+            val routes = stageRoutesCodec.decode(preferences[API_STAGE_ROUTES].orEmpty())
+                .withoutProfile(name)
+                .sanitize(profiles.map(ApiProfile::name).toSet())
+            saveStageRoutes(preferences, routes)
             if (preferences[CURRENT_PROFILE] == name) {
                 preferences.remove(CURRENT_PROFILE)
             }
@@ -100,6 +108,54 @@ class SettingsRepository(private val context: Context) {
     suspend fun getCurrentProfileName(): String = withContext(Dispatchers.IO) {
         context.dataStore.data.first()[CURRENT_PROFILE] ?: ""
     }
+
+    suspend fun getApiStageRoutes(): ApiStageRoutes = withContext(Dispatchers.IO) {
+        val preferences = context.dataStore.data.first()
+        val profiles = profileCodec.decode(preferences[API_PROFILES].orEmpty())
+        stageRoutesCodec.decode(preferences[API_STAGE_ROUTES].orEmpty())
+            .sanitize(profiles.map(ApiProfile::name).toSet())
+    }
+
+    suspend fun saveApiStageRoute(
+        stage: AiCallStage,
+        profileName: String
+    ): Unit = withContext(Dispatchers.IO) {
+        context.dataStore.edit { preferences ->
+            val profiles = profileCodec.decode(preferences[API_PROFILES].orEmpty())
+            val normalizedName = profileName.trim()
+            require(normalizedName.isBlank() || profiles.any { it.name == normalizedName }) {
+                "指定的 API 配置不存在"
+            }
+            val routes = stageRoutesCodec.decode(preferences[API_STAGE_ROUTES].orEmpty())
+                .assign(stage, normalizedName)
+                .sanitize(profiles.map(ApiProfile::name).toSet())
+            saveStageRoutes(preferences, routes)
+        }
+    }
+
+    suspend fun getApiConnection(stage: AiCallStage? = null): ApiProfile =
+        withContext(Dispatchers.IO) {
+            val preferences = context.dataStore.data.first()
+            val profiles = profileCodec.decode(preferences[API_PROFILES].orEmpty())
+            val routes = stageRoutesCodec.decode(preferences[API_STAGE_ROUTES].orEmpty())
+                .sanitize(profiles.map(ApiProfile::name).toSet())
+            val defaultConnection = ApiProfile(
+                name = preferences[CURRENT_PROFILE].orEmpty(),
+                baseUrl = preferences[API_BASE_URL]
+                    ?.takeIf(String::isNotBlank)
+                    ?: DEFAULT_API_BASE_URL,
+                apiKey = credentialCipher.decryptStored(preferences[API_KEY].orEmpty()),
+                model = preferences[MODEL]
+                    ?.takeIf(String::isNotBlank)
+                    ?: DEFAULT_MODEL
+            )
+            ApiConnectionRoutingPolicy.resolve(
+                defaultConnection = defaultConnection,
+                profiles = profiles,
+                routes = routes,
+                stage = stage
+            )
+        }
 
     suspend fun migrateLegacyCredentials(): Unit = withContext(Dispatchers.IO) {
         context.dataStore.edit { preferences ->
@@ -112,6 +168,17 @@ class SettingsRepository(private val context: Context) {
                     preferences[API_PROFILES] = encryptedProfiles
                 }
             }
+        }
+    }
+
+    private fun saveStageRoutes(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        routes: ApiStageRoutes
+    ) {
+        if (routes.routes.isEmpty()) {
+            preferences.remove(API_STAGE_ROUTES)
+        } else {
+            preferences[API_STAGE_ROUTES] = stageRoutesCodec.encode(routes)
         }
     }
 }

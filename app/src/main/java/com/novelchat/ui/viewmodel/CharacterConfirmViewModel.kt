@@ -8,6 +8,7 @@ import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.CharacterNamingPolicy
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.WorldbookEntry
+import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.model.ChatMessage
 import com.novelchat.data.remote.model.PlayerModificationPatch
 import com.novelchat.domain.engine.PlayerPromptSnapshotPolicy
@@ -69,7 +70,8 @@ class CharacterConfirmViewModel(application: Application) : AndroidViewModel(app
                 val response = aiService.chatComplete(
                     messages = listOf(ChatMessage(role = "user", content = prompt)),
                     temperature = 0.45f,
-                    maxTokens = 700
+                    maxTokens = 700,
+                    stage = AiCallStage.CHARACTER_SETUP
                 )
                 _uiState.value = _uiState.value.copy(
                     confirmationMessage = CharacterConfirmPolicy.confirmationText(
@@ -111,7 +113,8 @@ class CharacterConfirmViewModel(application: Application) : AndroidViewModel(app
                     messages = listOf(ChatMessage(role = "user", content = modifyPrompt)),
                     temperature = 0.25f,
                     maxTokens = 700,
-                    jsonMode = true
+                    jsonMode = true,
+                    stage = AiCallStage.CHARACTER_SETUP
                 )
 
                 // 尝试解析 JSON 中的 player 更新
@@ -137,7 +140,8 @@ class CharacterConfirmViewModel(application: Application) : AndroidViewModel(app
                     aiService.chatComplete(
                         messages = listOf(ChatMessage(role = "user", content = newPrompt)),
                         temperature = 0.45f,
-                        maxTokens = 700
+                        maxTokens = 700,
+                        stage = AiCallStage.CHARACTER_SETUP
                     )
                 } catch (e: Exception) {
                     e.rethrowCancellation()

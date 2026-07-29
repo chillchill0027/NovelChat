@@ -11,7 +11,7 @@ class SetupFlowPolicyTest {
     fun canContinue_allowsPrivateLocalEndpointWithoutKey() {
         assertTrue(
             SetupFlowPolicy.canContinue(
-                apiUrl = "http://192.168.1.21:1234",
+                apiUrl = "http://192.168.31.84:1234",
                 apiKey = "",
                 model = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
             )
@@ -53,7 +53,7 @@ class SetupFlowPolicyTest {
         )
         assertFalse(
             SetupFlowPolicy.canContinue(
-                apiUrl = "http://192.168.1.21:1234",
+                apiUrl = "http://192.168.31.84:1234",
                 apiKey = "secret",
                 model = "model"
             )

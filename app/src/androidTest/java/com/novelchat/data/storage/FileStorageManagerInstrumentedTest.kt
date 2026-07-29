@@ -3,9 +3,11 @@ package com.novelchat.data.storage
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.NarrativeEntry
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.StoryState
+import com.novelchat.data.model.SummaryEntry
 import com.novelchat.data.model.WorldSetting
 import com.novelchat.data.model.WorldbookEntry
 import kotlinx.coroutines.runBlocking
@@ -146,6 +148,152 @@ class FileStorageManagerInstrumentedTest {
             assertEquals("许安", recovered.characterName)
             assertEquals(2, recovered.messageCount)
             assertEquals("许安回到了家。", recovered.lastMessage)
+        } finally {
+            storage.deleteConversation(characterId)
+        }
+    }
+
+    @Test
+    fun roundCheckpoint_restoresStateAndTruncatesFutureBranch() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val storage = FileStorageManager(context)
+        val characterId = 9_000_000_004L
+        val originalPlayer = PlayerState(
+            name = "林克",
+            inventory = listOf(com.novelchat.data.model.InventoryItem(name = "旧钥匙"))
+        )
+        val originalStory = StoryState(
+            currentRound = 1,
+            currentLocation = "旧公寓",
+            activeCharacters = listOf("王常")
+        )
+        val originalCard = CharacterCard(
+            id = "wang_chang",
+            name = "王常",
+            occupation = "邻居",
+            mentalState = com.novelchat.data.model.MentalState(mood = "平静")
+        )
+        val originalWorldbook = WorldbookEntry(
+            id = "old_home",
+            type = "location",
+            name = "旧公寓",
+            description = "林克目前居住的地方"
+        )
+
+        storage.deleteConversation(characterId)
+        try {
+            storage.initialize(characterId)
+            storage.saveWorldSetting(characterId, WorldSetting(name = "分支测试"))
+            storage.savePlayerState(characterId, originalPlayer)
+            storage.saveStoryState(characterId, originalStory)
+            storage.saveCharacterCard(characterId, originalCard)
+            storage.saveWorldbookEntry(characterId, originalWorldbook)
+            storage.saveNarrative(
+                characterId,
+                NarrativeEntry(turn = 1, userInput = "回家", narrative = "林克回到旧公寓。")
+            )
+            storage.saveSummary(characterId, SummaryEntry(turn = 1, summary = "林克回家。"))
+
+            assertTrue(storage.saveNextRoundCheckpointIfAbsent(characterId))
+
+            storage.savePlayerState(
+                characterId,
+                originalPlayer.copy(
+                    inventory = originalPlayer.inventory +
+                        com.novelchat.data.model.InventoryItem(name = "未来彩票")
+                )
+            )
+            storage.saveStoryState(
+                characterId,
+                originalStory.copy(currentRound = 2, currentLocation = "未来彩票站")
+            )
+            storage.saveCharacterCard(
+                characterId,
+                originalCard.copy(
+                    mentalState = com.novelchat.data.model.MentalState(mood = "震惊")
+                )
+            )
+            storage.saveCharacterCard(
+                characterId,
+                CharacterCard(id = "future_worker", name = "未来店员", occupation = "彩票店员")
+            )
+            storage.saveWorldbookEntry(
+                characterId,
+                WorldbookEntry(
+                    id = "future_shop",
+                    type = "location",
+                    name = "未来彩票站"
+                )
+            )
+            storage.saveNarrative(
+                characterId,
+                NarrativeEntry(turn = 2, userInput = "去兑奖", narrative = "旧分支兑奖剧情。")
+            )
+            storage.saveSummary(characterId, SummaryEntry(turn = 2, summary = "旧分支摘要。"))
+            assertTrue(storage.saveNextRoundCheckpointIfAbsent(characterId))
+
+            storage.restoreRoundCheckpoint(characterId, 2)
+
+            assertEquals(originalStory, storage.loadStoryState(characterId))
+            assertEquals(originalPlayer, storage.loadPlayerState(characterId))
+            assertEquals(listOf(originalCard), storage.loadAllCharacterCards(characterId))
+            assertEquals(
+                listOf(originalWorldbook),
+                storage.loadAllWorldbookEntries(characterId)
+            )
+            assertEquals(listOf(1), storage.loadAllNarratives(characterId).map { it.turn })
+            assertEquals(listOf(1), storage.loadAllSummaries(characterId).map { it.turn })
+            assertEquals(setOf(2), storage.loadRoundCheckpointTurns(characterId))
+        } finally {
+            storage.deleteConversation(characterId)
+        }
+    }
+
+    @Test
+    fun compatibilityCheckpoint_allowsLegacyRoundToBeReplacedInPlace() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val storage = FileStorageManager(context)
+        val characterId = 9_000_000_005L
+
+        storage.deleteConversation(characterId)
+        try {
+            storage.initialize(characterId)
+            storage.saveWorldSetting(characterId, WorldSetting(name = "旧存档兼容测试"))
+            storage.savePlayerState(characterId, PlayerState(name = "林克"))
+            val currentState = StoryState(
+                currentRound = 3,
+                currentLocation = "当前场景",
+                globalFlags = mapOf("state_sync_pending_from_round" to "3")
+            )
+            storage.saveStoryState(characterId, currentState)
+            (1..3).forEach { turn ->
+                storage.saveNarrative(
+                    characterId,
+                    NarrativeEntry(
+                        turn = turn,
+                        userInput = "旧提示词$turn",
+                        narrative = "旧剧情$turn"
+                    )
+                )
+            }
+
+            val compatibilityState = currentState.copy(
+                currentRound = 1,
+                globalFlags = emptyMap()
+            )
+            assertTrue(
+                storage.saveCompatibilityRoundCheckpointIfAbsent(
+                    characterId = characterId,
+                    round = 2,
+                    storyState = compatibilityState
+                )
+            )
+            storage.restoreRoundCheckpoint(characterId, 2)
+
+            assertEquals(1, storage.loadStoryState(characterId).currentRound)
+            assertEquals(emptyMap<String, String>(), storage.loadStoryState(characterId).globalFlags)
+            assertEquals(listOf(1), storage.loadAllNarratives(characterId).map { it.turn })
+            assertEquals(setOf(2), storage.loadRoundCheckpointTurns(characterId))
         } finally {
             storage.deleteConversation(characterId)
         }
