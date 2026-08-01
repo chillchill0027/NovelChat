@@ -47,6 +47,9 @@ internal object StoryParseQualityPolicy {
                 ?.key
             if (duplicateNpcName != null) add("多个 NPC 使用了同一个姓名“$duplicateNpcName”")
             if (result.worldbook.isEmpty()) add("没有生成可检索的世界书条目")
+            if (result.worldSetting.characterFields.isEmpty()) {
+                add("没有根据题材生成 character_fields、字段定义和角色初始指标")
+            }
         }
         return issues.joinToString("；").takeIf { it.isNotBlank() }
     }

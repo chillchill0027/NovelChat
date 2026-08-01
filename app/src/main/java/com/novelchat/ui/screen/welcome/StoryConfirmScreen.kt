@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.novelchat.data.model.CharacterLore
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.WorldLore
 import com.novelchat.data.remote.model.ParsedNpc
 import com.novelchat.data.remote.model.ParsedWorldbookItem
@@ -100,7 +102,7 @@ fun StoryConfirmScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        renderNpc(npc),
+                        renderNpc(npc, result.worldSetting.characterFields),
                         color = DimText,
                         fontSize = 12.sp,
                         lineHeight = 19.sp,
@@ -212,23 +214,41 @@ private fun renderWorldSetting(r: StoryParseResult): String = buildString {
     appendField("基调", ws.tone)
     appendList("禁止事项", ws.forbidden)
     appendField("世界摘要", ws.description)
+    appendList(
+        "角色卡字段",
+        CharacterFieldPolicy.effectiveDefinitions(ws.characterFields).map { field ->
+            "${field.label}(${field.key} · ${field.group} · ${field.updateMode})"
+        },
+        "；"
+    )
     appendWorldLore(ws.lore)
 }
 
 private fun renderPlayer(r: StoryParseResult): String = buildString {
     val p = r.player
-    appendField("姓名", p.name)
-    appendField("年龄", p.age.toString())
-    appendField("性别", p.gender)
-    appendField("种族", p.race)
-    appendField("职业", p.class_)
-    appendField("性格", p.personality)
-    appendField("外貌", p.appearance)
-    appendField("背景", p.background)
-    appendList("技能", p.skills)
+    val fields = r.worldSetting.characterFields
+    appendField(labelFor(fields, "name", "姓名"), p.name)
+    appendField(labelFor(fields, "age", "年龄"), p.age.toString())
+    appendField(labelFor(fields, "gender", "性别"), p.gender)
+    appendField(labelFor(fields, "race", "种族"), p.race)
+    appendField(labelFor(fields, "occupation", "身份"), p.class_)
+    appendField(labelFor(fields, "personality", "人物特征"), p.personality)
+    appendField(labelFor(fields, "appearance", "外貌"), p.appearance)
+    appendField(labelFor(fields, "background", "经历"), p.background)
+    appendList(labelFor(fields, "skills", "技能"), p.skills)
+    appendField(labelFor(fields, "level", "等级"), p.level.toString())
+    appendField(labelFor(fields, "charm", "魅力"), p.charm.toString())
+    appendField(labelFor(fields, "action_skill", "行动技巧"), p.actionSkill.toString())
+    appendField(labelFor(fields, "social_rank", "社交等级"), p.socialRank)
+    appendField(labelFor(fields, "luck", "运气"), p.luck.toString())
+    appendField(labelFor(fields, "willpower", "意志"), p.willpower.toString())
+    appendField(labelFor(fields, "resilience", "体魄抗性"), p.resilience.toString())
     appendCharacterLore(p.lore)
-    appendField("初始身体", physicalSummary(p.physicalState))
-    appendField("初始心理", mentalSummary(p.mentalState))
+    appendField("初始身体", physicalSummary(p.physicalState, fields))
+    appendField("初始心理", mentalSummary(p.mentalState, fields))
+    p.customAttributes.forEach { (key, value) ->
+        appendField(labelFor(fields, key, key), value)
+    }
     if (p.inventory.isNotEmpty()) {
         appendList("初始物品", p.inventory.map { "${it.name} ×${it.quantity}" })
     }
@@ -248,17 +268,23 @@ private fun renderOpening(r: StoryParseResult): String = buildString {
     }
 }
 
-private fun renderNpc(npc: ParsedNpc): String = buildString {
-    appendField("年龄", npc.age.takeIf { it > 0 }?.toString().orEmpty())
-    appendField("性别", npc.gender)
-    appendField("种族", npc.race)
+private fun renderNpc(
+    npc: ParsedNpc,
+    fields: List<CharacterFieldDefinition>
+): String = buildString {
+    appendField(labelFor(fields, "age", "年龄"), npc.age.takeIf { it > 0 }?.toString().orEmpty())
+    appendField(labelFor(fields, "gender", "性别"), npc.gender)
+    appendField(labelFor(fields, "race", "种族"), npc.race)
     appendField("与主角关系", npc.relationshipToPlayer)
-    appendField("性格", npc.personality)
-    appendField("外貌", npc.appearance)
-    appendField("背景", npc.background)
+    appendField(labelFor(fields, "personality", "人物特征"), npc.personality)
+    appendField(labelFor(fields, "appearance", "外貌"), npc.appearance)
+    appendField(labelFor(fields, "background", "经历"), npc.background)
     appendCharacterLore(npc.lore)
-    appendField("初始身体", physicalSummary(npc.physicalState))
-    appendField("初始心理", mentalSummary(npc.mentalState))
+    appendField("初始身体", physicalSummary(npc.physicalState, fields))
+    appendField("初始心理", mentalSummary(npc.mentalState, fields))
+    npc.customAttributes.forEach { (key, value) ->
+        appendField(labelFor(fields, key, key), value)
+    }
     if (npc.inventory.isNotEmpty()) {
         appendList("初始物品", npc.inventory.map { "${it.name} ×${it.quantity}" })
     }
@@ -338,25 +364,37 @@ private fun StringBuilder.appendList(
     if (normalized.isNotEmpty()) appendLine("$label：${normalized.joinToString(separator)}")
 }
 
-private fun physicalSummary(state: com.novelchat.data.model.PhysicalState): String {
+private fun physicalSummary(
+    state: com.novelchat.data.model.PhysicalState,
+    fields: List<CharacterFieldDefinition>
+): String {
     return listOf(
-        "体力 ${state.stamina.coerceIn(0, 100)}",
-        state.health,
-        state.fatigue.takeIf { it.isNotBlank() }?.let { "疲劳 $it" },
-        state.hunger.takeIf { it.isNotBlank() }?.let { "饥饿 $it" },
-        state.pain.takeIf { it.isNotBlank() && it != "无" }?.let { "疼痛 $it" },
+        "${labelFor(fields, "stamina", "体力")} ${state.stamina}",
+        "${labelFor(fields, "health", "健康")} ${state.health}",
+        state.fatigue.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "fatigue", "疲劳")} $it" },
+        state.hunger.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "hunger", "饥饿")} $it" },
+        state.pain.takeIf { it.isNotBlank() && it != "无" }?.let { "${labelFor(fields, "pain", "疼痛")} $it" },
         state.injuries.takeIf { it.isNotEmpty() }?.joinToString("、", prefix = "伤势 ")
     ).filterNotNull().filter(String::isNotBlank).joinToString(" · ")
 }
 
-private fun mentalSummary(state: com.novelchat.data.model.MentalState): String {
+private fun mentalSummary(
+    state: com.novelchat.data.model.MentalState,
+    fields: List<CharacterFieldDefinition>
+): String {
     return listOf(
-        state.mood,
-        state.stress.takeIf { it.isNotBlank() }?.let { "压力 $it" },
-        state.focus.takeIf { it.isNotBlank() }?.let { "关注 $it" },
-        state.currentThoughts.takeIf { it.isNotBlank() }?.let { "想法 $it" }
+        state.mood.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "mood", "情绪")} $it" },
+        state.stress.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "stress", "压力")} $it" },
+        state.focus.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "focus", "关注")} $it" },
+        state.currentThoughts.takeIf { it.isNotBlank() }?.let { "${labelFor(fields, "current_thoughts", "想法")} $it" }
     ).filterNotNull().filter(String::isNotBlank).joinToString(" · ")
 }
+
+private fun labelFor(
+    fields: List<CharacterFieldDefinition>,
+    key: String,
+    fallback: String
+): String = CharacterFieldPolicy.definitionFor(fields, key)?.label?.ifBlank { fallback } ?: fallback
 
 private fun worldbookTypeLabel(type: String): String {
     return when (type) {

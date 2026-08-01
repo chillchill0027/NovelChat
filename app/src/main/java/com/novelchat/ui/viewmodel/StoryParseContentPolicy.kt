@@ -2,6 +2,8 @@ package com.novelchat.ui.viewmodel
 
 import com.novelchat.data.model.WorldbookContentPolicy
 import com.novelchat.data.model.CharacterLore
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.InventoryItem
 import com.novelchat.data.model.MentalState
 import com.novelchat.data.model.PhysicalState
@@ -25,11 +27,12 @@ object StoryParseContentPolicy {
     private const val MAX_CUSTOM_FIELDS = 24
 
     fun normalize(result: StoryParseResult): StoryParseResult {
+        val world = normalizeWorld(result.worldSetting)
         return result.copy(
-            worldSetting = normalizeWorld(result.worldSetting),
-            player = normalizePlayer(result.player),
+            worldSetting = world,
+            player = normalizePlayer(result.player, world.characterFields),
             npcs = result.npcs
-                .map(::normalizeNpc)
+                .map { normalizeNpc(it, world.characterFields) }
                 .distinctBy { npc -> npc.name.lowercase() }
                 .take(MAX_NPCS),
             worldbook = result.worldbook
@@ -49,14 +52,18 @@ object StoryParseContentPolicy {
             tone = summary(world.tone),
             forbidden = list(world.forbidden),
             description = long(world.description),
-            lore = normalizeWorldLore(world.lore)
+            lore = normalizeWorldLore(world.lore),
+            characterFields = CharacterFieldPolicy.normalizeDefinitions(world.characterFields)
         )
     }
 
-    private fun normalizePlayer(player: ParsedPlayer): ParsedPlayer {
+    private fun normalizePlayer(
+        player: ParsedPlayer,
+        characterFields: List<CharacterFieldDefinition>
+    ): ParsedPlayer {
         return player.copy(
             name = name(player.name),
-            age = player.age.takeIf { it in 1..120 } ?: 20,
+            age = number(characterFields, "age", player.age, 20),
             gender = short(player.gender),
             race = short(player.race),
             class_ = short(player.class_),
@@ -64,17 +71,32 @@ object StoryParseContentPolicy {
             background = long(player.background),
             appearance = summary(player.appearance),
             skills = list(player.skills),
+            level = number(characterFields, "level", player.level, 1),
+            charm = number(characterFields, "charm", player.charm, 25),
+            actionSkill = number(characterFields, "action_skill", player.actionSkill, 10),
+            socialRank = fieldText(characterFields, "social_rank", player.socialRank, "E"),
+            luck = number(characterFields, "luck", player.luck, 50),
+            willpower = number(characterFields, "willpower", player.willpower, 15),
+            resilience = number(characterFields, "resilience", player.resilience, 20),
             lore = normalizeCharacterLore(player.lore),
-            physicalState = normalizePhysicalState(player.physicalState),
-            mentalState = normalizeMentalState(player.mentalState),
+            physicalState = normalizePhysicalState(player.physicalState, characterFields),
+            mentalState = normalizeMentalState(player.mentalState, characterFields),
+            customAttributes = CharacterFieldPolicy.normalizeImportedAttributes(
+                player.customAttributes,
+                characterFields,
+                CharacterFieldDefinition.TARGET_PLAYER
+            ),
             inventory = normalizeInventory(player.inventory)
         )
     }
 
-    private fun normalizeNpc(npc: ParsedNpc): ParsedNpc {
+    private fun normalizeNpc(
+        npc: ParsedNpc,
+        characterFields: List<CharacterFieldDefinition>
+    ): ParsedNpc {
         return npc.copy(
             name = name(npc.name),
-            age = npc.age.takeIf { it in 1..120 } ?: 0,
+            age = number(characterFields, "age", npc.age, 0),
             gender = short(npc.gender),
             race = short(npc.race),
             occupation = short(npc.occupation),
@@ -83,8 +105,13 @@ object StoryParseContentPolicy {
             appearance = summary(npc.appearance),
             relationshipToPlayer = short(npc.relationshipToPlayer),
             lore = normalizeCharacterLore(npc.lore),
-            physicalState = normalizePhysicalState(npc.physicalState),
-            mentalState = normalizeMentalState(npc.mentalState),
+            physicalState = normalizePhysicalState(npc.physicalState, characterFields),
+            mentalState = normalizeMentalState(npc.mentalState, characterFields),
+            customAttributes = CharacterFieldPolicy.normalizeImportedAttributes(
+                npc.customAttributes,
+                characterFields,
+                CharacterFieldDefinition.TARGET_NPC
+            ),
             inventory = normalizeInventory(npc.inventory)
         )
     }
@@ -167,24 +194,57 @@ object StoryParseContentPolicy {
         )
     }
 
-    private fun normalizePhysicalState(state: PhysicalState): PhysicalState {
+    private fun normalizePhysicalState(
+        state: PhysicalState,
+        characterFields: List<CharacterFieldDefinition>
+    ): PhysicalState {
         return state.copy(
-            stamina = state.stamina.coerceIn(0, 100),
-            health = short(state.health).ifBlank { "良好" },
+            stamina = number(characterFields, "stamina", state.stamina, 100),
+            health = fieldText(characterFields, "health", state.health, "良好"),
             injuries = loreList(state.injuries),
-            fatigue = short(state.fatigue).ifBlank { "无" },
-            hunger = short(state.hunger).ifBlank { "不饿" },
-            pain = short(state.pain).ifBlank { "无" }
+            fatigue = fieldText(characterFields, "fatigue", state.fatigue, "无"),
+            hunger = fieldText(characterFields, "hunger", state.hunger, "不饿"),
+            pain = fieldText(characterFields, "pain", state.pain, "无")
         )
     }
 
-    private fun normalizeMentalState(state: MentalState): MentalState {
+    private fun normalizeMentalState(
+        state: MentalState,
+        characterFields: List<CharacterFieldDefinition>
+    ): MentalState {
         return state.copy(
-            mood = short(state.mood),
-            stress = short(state.stress).ifBlank { "低" },
-            focus = summary(state.focus),
-            currentThoughts = summary(state.currentThoughts)
+            mood = fieldText(characterFields, "mood", state.mood, ""),
+            stress = fieldText(characterFields, "stress", state.stress, "低"),
+            focus = fieldText(characterFields, "focus", state.focus, ""),
+            currentThoughts = fieldText(
+                characterFields,
+                "current_thoughts",
+                state.currentThoughts,
+                ""
+            )
         )
+    }
+
+    private fun number(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        value: Int,
+        fallback: Int
+    ): Int {
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key) ?: return value
+        return CharacterFieldPolicy.sanitizeValue(field, value.toString())?.toIntOrNull() ?: fallback
+    }
+
+    private fun fieldText(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        value: String,
+        fallback: String
+    ): String {
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key)
+            ?: return short(value).ifBlank { fallback }
+        return CharacterFieldPolicy.sanitizeValue(field, value.ifBlank { field.defaultValue })
+            ?: fallback
     }
 
     private fun normalizeInventory(items: List<InventoryItem>): List<InventoryItem> {

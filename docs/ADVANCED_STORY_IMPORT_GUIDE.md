@@ -5,6 +5,7 @@
 配套文件：
 
 - [advanced_story_import_v1.example.json](./advanced_story_import_v1.example.json)：可直接导入的完整示例。
+- [advanced_story_import_magic_academy.example.json](./advanced_story_import_magic_academy.example.json)：39 个有效角色字段、3 位 NPC、8 条世界书和 6 条世界规则组成的原创魔法学院示例。
 - [advanced_story_import_v1.schema.json](./advanced_story_import_v1.schema.json)：机器可读 JSON Schema。
 - 应用内“载入完整模板”：与示例同等完整，可直接校验和创建故事。
 
@@ -117,6 +118,7 @@
 | `forbidden` | string[] | 模型不得引入或不得越过的元素 |
 | `description` | string | 世界摘要；未填写时必须提供非空 `lore` |
 | `lore` | object | 详细全局设定 |
+| `character_fields` | object[] | 角色卡字段定义、显示方式和剧情刷新规则，最多 40 项 |
 
 ### `world_setting.lore`
 
@@ -146,6 +148,155 @@
 
 `lore` 中每个大段应写概要。某个城市、门派、公司或地点的完整资料请拆到世界书。
 
+### `world_setting.character_fields`
+
+这是一组故事级角色卡字段定义。它同时控制四件事：
+
+1. 角色卡显示什么名称、单位和顺序。
+2. 初始值允许使用什么类型、范围或选项。
+3. 字段适用于主角、NPC，还是两者。
+4. AI 在剧情推进后应按什么节奏更新字段。
+
+未填写 `character_fields` 时，应用自动使用完整默认字段集，旧故事因此无需迁移。填写同名内置 `key` 会覆盖该字段的定义；使用新 `key` 会增加新字段。无需把所有默认字段重复抄一遍。
+
+```json
+{
+  "world_setting": {
+    "character_fields": [
+      {
+        "key": "stamina",
+        "label": "魔法值",
+        "description": "施法、维持法术和抵抗魔力反噬所消耗的能量",
+        "group": "status",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 200,
+        "default_value": "160",
+        "unit": "MP",
+        "applies_to": "all",
+        "display": "primary",
+        "primary_for": "player",
+        "update_mode": "dynamic",
+        "order": 30
+      },
+      {
+        "key": "arcane_affinity",
+        "label": "奥术亲和",
+        "description": "角色对奥术结构的稳定理解与亲和程度",
+        "group": "ability",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 10,
+        "default_value": "2",
+        "unit": "阶",
+        "applies_to": "all",
+        "display": "detail",
+        "primary_for": "all",
+        "update_mode": "event",
+        "order": 25
+      }
+    ]
+  },
+  "player": {
+    "name": "林克",
+    "physical_state": { "stamina": 160 },
+    "custom_attributes": { "arcane_affinity": 4 }
+  }
+}
+```
+
+上例复用了原有 `stamina` 存储位置，但界面、提示词和 AI 状态同步都会把它理解为“魔法值”，范围改为 `0..200`。新字段 `arcane_affinity` 的初始值写在角色的 `custom_attributes`。
+
+#### 字段定义属性
+
+| 属性 | 必填 | 可选值 / 说明 |
+| --- | --- | --- |
+| `key` | 是 | 稳定机器键；小写字母开头，只能含小写字母、数字、下划线，最长 40 字符 |
+| `label` | 是 | 用户看到的名称，最长 24 字符 |
+| `description` | 否 | 告诉 AI 该值表示什么、何时变化，最长 240 字符 |
+| `group` | 否 | `identity`、`profile`、`ability`、`status`、`relationship` |
+| `value_type` | 否 | `number`、`text`、`choice`、`list`；默认 `text` |
+| `min_value` / `max_value` | 数值字段 | 数值边界，必须前小后大，绝对值不得超过 1,000,000 |
+| `options` | choice 字段 | 允许的文本选项数组，例如 `["平静", "警觉", "恐惧"]` |
+| `default_value` | 建议 | 用户或 AI 未给初值时使用；自定义字段建议始终填写 |
+| `unit` | 否 | `%`、`MP`、`阶` 等，最长 12 字符 |
+| `applies_to` | 否 | `all`、`player`、`npc`；默认 `all` |
+| `display` | 否 | `primary` 首页判断项、`detail` 详情项、`hidden` 不显示 |
+| `primary_for` | 否 | 首页展示给 `all`、`player` 或 `npc`；仅在 `display=primary` 时生效 |
+| `update_mode` | 否 | `dynamic`、`event`、`manual`；默认 `event` |
+| `order` | 否 | 同组排序，范围 `0..999` |
+
+#### 刷新模式
+
+| 模式 | 适用内容 | 刷新规则 |
+| --- | --- | --- |
+| `dynamic` | 魔法值、健康、情绪、风险、信任等即时状态 | 本轮正文出现明确变化时可立即刷新 |
+| `event` | 性格、背景经历、技能、魅力、社会等级、长期能力 | 只有重大事件、学习成果或反复行为形成稳定变化时刷新，不能每轮随意改写 |
+| `manual` | 姓名、作者标签、固定分类 | 仅接受导入初值，普通剧情同步不会修改 |
+
+`description` 应写“判断规则”，不要只重复名称。例如“意志”可写成“抵抗诱惑、恐惧与精神冲击的能力；只有明确训练或重大考验后才改变”。这会显著提高本地小模型的更新准确度。
+
+#### 内置字段 key
+
+| 分组 | 内置 key |
+| --- | --- |
+| 身份 | `name`、`occupation`、`race`、`age`、`gender` |
+| 人物档案 | `appearance`、`personality`、`background` |
+| 能力成长 | `skills`、`level`、`charm`、`action_skill`、`social_rank`、`willpower`、`resilience`、`luck` |
+| 即时状态 | `stamina`、`health`、`fatigue`、`hunger`、`pain`、`mood`、`stress`、`focus`、`current_thoughts`、`risk` |
+| NPC 关系 | `relationship_stage`、`favor`、`trust` |
+| 兼容字段 | `rarity`、`action_tendency`、`defense_threshold`、`relationship_status`、`hidden_clue` |
+
+内置字段可以改 `label`、说明、范围、单位、显示位置、适用角色和刷新模式，但数值型内置字段必须继续使用 `value_type: "number"`。`name` 默认是 `manual`，剧情中不会因模型输出而自动改名。
+
+#### `custom_attributes`
+
+主角和每个 NPC 都可提供自己的自定义值：
+
+```json
+{
+  "name": "王常",
+  "custom_attributes": {
+    "arcane_affinity": 6,
+    "guild_reputation": "受信任",
+    "known_spells": ["照明术", "护盾术"]
+  }
+}
+```
+
+每个 key 必须先在 `character_fields` 定义，并且 `applies_to` 必须覆盖该角色。字符串、数字和布尔值会按字段定义归一化；`list` 也可以传数组，应用会转换为列表文本。缺少初值时使用 `default_value`。未定义 key 会被高级导入拒绝，避免拼写错误造成数据静默丢失。
+
+#### AI 识别模式
+
+自然语言导入也使用同一套接口。AI 会先识别用户明确给出的字段名称、范围与初值；缺失时根据题材补全合理定义和初始值。例如奇幻设定提到法力消耗时，可把 `stamina` 定义为“魔法值”；侦探故事可以新增“线索敏感度”；校园故事可以把 `social_rank` 改名为“校园声望”。确认页会显示识别后的字段定义，用户可在创建故事前核对。
+
+剧情生成后的状态同步会收到当前 `character_fields` 契约。主角变化由任务分配阶段写入 `player_update.changes.attributes`；NPC 的长期与即时变化由角色刷新阶段写入 `attributes`。更新先按字段类型、范围、适用角色和 `update_mode` 校验，再写入存档和角色卡。
+
+#### 完整魔法接口示例
+
+可直接导入 [advanced_story_import_magic_academy.example.json](./advanced_story_import_magic_academy.example.json) 查看完整做法。它没有修改应用源码，而是在每个故事自己的 `character_fields` 中完成以下替换：
+
+| 存储 key | 自定义名称 | 范围/选项 | 初值位置 | 刷新依据 |
+| --- | --- | --- | --- | --- |
+| `stamina` | 魔力储备 | `0..180`、单位 `/180` | `physical_state.stamina` | 施法消耗，休息或安全引潮恢复 |
+| `risk` | 秘仪暴露 | `0..100%` | 主角兼容风险值 | 违规调查、警报、追捕或被记录时变化 |
+| `health` | 灵脉状态 | 稳定/轻度紊乱/受损/严重受损/治疗中 | `physical_state.health` | 反噬、治疗或灵脉损伤 |
+| `fatigue` | 咒疲 | 无/轻微/中等/严重 | `physical_state.fatigue` | 持续构筑、奔跑、休息或睡眠 |
+| `pain` | 反噬灼痛 | 无/轻微/明显/剧烈 | `physical_state.pain` | 反噬或伤害发生、缓解时 |
+| `stress` | 心智负荷 | 安定/轻微/中等/偏高/危险 | `mental_state.stress` | 威胁、秘密、追捕或安全休息 |
+| `mood` | 当前心境 | 文本 | `mental_state.mood` | 当前可观察情绪变化 |
+| `spell_control` | 咒式稳定 | `0..100%` | `custom_attributes` | 每次明确施法及中止结果 |
+| `arcane_taint` | 奥术侵蚀 | `0..100%` | `custom_attributes` | 接触回声层、禁术或完成净化 |
+| `oath_strain` | 誓约张力 | `0..100%` | `custom_attributes` | 行为与现有誓约发生冲突或得到解除 |
+| `faculty_reputation` | 学院声望 | `-100..100` | `custom_attributes` | 只在足以形成长期评价的事件中变化 |
+| `clue_depth` | 断星线索 | `0..100%` | `custom_attributes` | 取得并能够相互印证的新证据时变化 |
+
+内置 key 是稳定存储接口，用户修改的是 `label`、`description`、范围、单位、显示位置和更新规则。例如要把体力改成魔力，应继续使用 key `stamina`，并在 `physical_state.stamina` 填初值；这样现有存档、角色状态补丁和首页进度显示都能直接工作。只有真正新增的概念才使用新 key，并在角色的 `custom_attributes` 中填值。
+
+`display: "primary"` 只应用于少量能帮助下一步判断的指标。变化快但不适合首页决策的疼痛、饥饿、心情和思绪应放在 `detail`；长期档案也不应占用首页。剧情同步只在正文有明确证据时刷新 `dynamic` 字段，`event` 字段需要足以形成长期改变的事件，`manual` 字段只由导入数据或用户编辑决定。
+
+真机十轮验证、数值曲线和问题修复记录见 [MAGIC_ACADEMY_QA_REPORT.md](./MAGIC_ACADEMY_QA_REPORT.md)。
+
 ## 5. 主角字段
 
 ```json
@@ -160,6 +311,14 @@
     "background": "故事开始前的背景",
     "appearance": "可观察外貌",
     "skills": ["信息整理"],
+    "level": 3,
+    "charm": 46,
+    "action_skill": 41,
+    "social_rank": "普通职员",
+    "luck": 52,
+    "willpower": 58,
+    "resilience": 49,
+    "custom_attributes": {"life_stability": 35},
     "lore": {},
     "physical_state": {},
     "mental_state": {},
@@ -185,6 +344,7 @@
   "background": "搬来小区五年",
   "appearance": "常穿灰色工作外套",
   "relationship_to_player": "新邻居",
+  "custom_attributes": {"life_stability": 42},
   "lore": {},
   "physical_state": {},
   "mental_state": {},
@@ -254,14 +414,14 @@
 
 | 字段 | 类型 | 约束 |
 | --- | --- | --- |
-| `stamina` | integer | 0 到 100 |
+| `stamina` | integer | 由 `character_fields` 中 `stamina` 的范围决定；未覆盖时为 0 到 100 |
 | `health` | string | 可判断的健康概况 |
 | `injuries` | string[] | 具体伤势 |
 | `fatigue` | string | 疲劳程度 |
 | `hunger` | string | 饥饿状态 |
 | `pain` | string | 疼痛状态 |
 
-这些是故事第一刻的状态，后续会根据已发生剧情更新。
+这些是故事第一刻的存储值，后续会根据已发生剧情更新。页面显示名称不固定：`stamina`、`health`、`fatigue`、`hunger`、`pain` 都可以在 `character_fields` 中改名、改说明、改选项或隐藏；`stamina` 还可改数值范围与单位。
 
 ## 9. 初始心理状态
 
@@ -276,7 +436,7 @@
 }
 ```
 
-`current_thoughts` 是开始时的有限视角，不应包含角色不知道的秘密。
+`current_thoughts` 是开始时的有限视角，不应包含角色不知道的秘密。`mood`、`stress`、`focus`、`current_thoughts` 同样可以通过 `character_fields` 自定义显示名称、选项、更新模式和显示位置。
 
 ## 10. 初始物品
 
@@ -394,6 +554,7 @@
 | JSON 总长度 | 80,000 字符 |
 | NPC 数量 | 50 |
 | 世界书数量 | 100 |
+| 角色字段定义 | 40 |
 | 列表字段 | 一般最多保留 20 到 30 项 |
 | 自定义键值 | 每个 `custom` 最多保留 24 项 |
 | 姓名 | 最多 80 字符 |
@@ -404,20 +565,20 @@
 导入时会：
 
 - 去除字段首尾空白。
-- 限制异常年龄、体力和数量。
+- 按角色字段定义限制年龄、体力、能力值和所有自定义数值。
 - 去除空列表项与重复项。
 - 归一化世界书类型。
 - 检查主角和 NPC 的真实姓名、唯一性。
 - 检查开局同场角色是否已定义。
 - 为缺失的非关键开局字段提供克制默认值。
 
-未知字段会被忽略。需要保留自定义数据时，请放入相应 `custom` 对象。
+普通未知字段会被忽略。世界或人物设定的作者侧扩展写入 `lore.custom`；需要在角色卡显示并随剧情更新的值，必须先定义 `character_fields`，再写入 `custom_attributes`。
 
 ## 14. 对本地小模型的上下文策略
 
 高级导入允许保存大量资料，但不会把全部内容原样塞进每一轮：
 
-1. `world_setting` 作为全局设定进入提示词，字段会进行有界快照。
+1. `world_setting` 和 `character_fields` 作为全局契约进入提示词，字段会进行有界快照。
 2. 主角和当前活跃角色的长期设定进入叙事上下文。
 3. 世界书通过地点、用户输入、待办和近期正文关键词匹配。
 4. 每轮最多选择相关世界书条目，单条描述也有长度边界。
@@ -441,11 +602,11 @@
 | 输入 | 自然语言 | JSON v1 |
 | 是否调用模型 | 是 | 否 |
 | 是否产生推断 | 可能 | 不会 |
-| 字段控制 | 模型决定 | 接入方决定 |
+| 字段控制 | 模型根据原文识别并补全 | 接入方完整决定 |
 | 错误反馈 | 解析/质量错误 | 精确结构和字段错误 |
 | 适用场景 | 快速开始、设定草稿 | 长期项目、外部生成器、精确角色卡 |
 
-AI 识别现在也会尝试生成相同的 `lore`、初始状态、世界书关系和开局字段。对关键姓名、秘密、规则和关系仍建议使用高级接入复核。
+AI 识别现在也会生成相同的 `character_fields`、能力初值、`custom_attributes`、`lore`、世界书关系和开局字段。用户未明确提供角色指标时，模型会按题材推断适合的定义和初值；关键姓名、范围、秘密、规则和关系仍建议在确认页复核，要求完全可重复时使用高级接入。
 
 ## 16. 模型配置与兼容服务
 

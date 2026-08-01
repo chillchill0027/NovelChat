@@ -1,6 +1,7 @@
 package com.novelchat.domain.engine
 
 import com.novelchat.data.model.CharacterStatePatch
+import com.novelchat.data.model.CharacterFieldPolicy
 
 internal object CharacterStatePatchContentPolicy {
     private const val MAX_SHORT_LENGTH = 120
@@ -32,6 +33,14 @@ internal object CharacterStatePatchContentPolicy {
                     currentThoughts = state.currentThoughts?.let { it.trim().take(MAX_PROFILE_LENGTH) }
                 )
             },
+            attributes = patch.attributes.entries.asSequence()
+                .mapNotNull { (rawKey, rawValue) ->
+                    val key = rawKey.trim().lowercase().take(40)
+                    val value = rawValue.trim().take(CharacterFieldPolicy.MAX_VALUE_LENGTH)
+                    if (!CharacterFieldPolicy.isValidKey(key) || value.isBlank()) null else key to value
+                }
+                .take(CharacterFieldPolicy.MAX_FIELDS)
+                .toMap(),
             relationshipToPlayer = patch.relationshipToPlayer?.let { relationship ->
                 relationship.copy(
                     favorDelta = relationship.favorDelta.coerceIn(-100, 100),

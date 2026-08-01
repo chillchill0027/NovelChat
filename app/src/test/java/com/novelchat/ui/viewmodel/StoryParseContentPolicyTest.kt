@@ -37,7 +37,7 @@ class StoryParseContentPolicyTest {
 
         assertEquals(6_000, normalized.worldSetting.description.length)
         assertEquals(80, normalized.player.name.length)
-        assertEquals(20, normalized.player.age)
+        assertEquals(120, normalized.player.age)
         assertEquals(80, normalized.opening.currentLocation.length)
         assertEquals(2_000, normalized.opening.mood.length)
         assertEquals(30, normalized.opening.pendingEvents.size)

@@ -212,6 +212,26 @@ class TaskAssignmentExecutionPolicyTest {
         assertEquals(1_000, changes.questLog?.first()?.description?.length)
         assertEquals(20, changes.physicalState?.injuries?.size)
         assertEquals(1_000, changes.physicalState?.injuries?.first()?.length)
-        assertEquals(100, changes.risk)
+        assertEquals(999, changes.risk)
+    }
+
+    @Test
+    fun sanitize_keepsValidCharacterAttributePatches() {
+        val sanitized = TaskAssignmentExecutionPolicy.sanitize(
+            assignment = TaskAssignment(
+                playerUpdate = PlayerUpdate(
+                    changes = PlayerChanges(
+                        attributes = mapOf(" Personality " to "更愿意直面冲突", "bad-key!" to "丢弃")
+                    )
+                ),
+                newCharacters = listOf(
+                    NewCharacter(name = "王常", attributes = mapOf("life_stability" to "42"))
+                )
+            ),
+            playerName = "林克"
+        )
+
+        assertEquals(mapOf("personality" to "更愿意直面冲突"), sanitized.playerUpdate!!.changes.attributes)
+        assertEquals(mapOf("life_stability" to "42"), sanitized.newCharacters.single().attributes)
     }
 }

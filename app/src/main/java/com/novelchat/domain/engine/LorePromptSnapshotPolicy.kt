@@ -1,6 +1,7 @@
 package com.novelchat.domain.engine
 
 import com.novelchat.data.model.CharacterLore
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.WorldLore
 import com.novelchat.data.model.WorldSetting
 
@@ -18,6 +19,31 @@ internal object LorePromptSnapshotPolicy {
             putText("tone", setting.tone)
             putList("forbidden", setting.forbidden)
             putText("description", setting.description)
+            put(
+                "character_fields",
+                CharacterFieldPolicy.effectiveDefinitions(setting.characterFields)
+                    .filter { field ->
+                        field.display != "hidden" || setting.characterFields.any { it.key == field.key }
+                    }
+                    .map { field ->
+                    linkedMapOf<String, Any>(
+                        "key" to field.key,
+                        "label" to field.label,
+                        "group" to field.group,
+                        "value_type" to field.valueType,
+                        "applies_to" to field.appliesTo,
+                        "update_mode" to field.updateMode
+                    ).apply {
+                        field.description.takeIf(String::isNotBlank)?.let { put("description", it) }
+                        if (field.valueType == "number") {
+                            put("min_value", field.minValue)
+                            put("max_value", field.maxValue)
+                            field.unit.takeIf(String::isNotBlank)?.let { put("unit", it) }
+                        }
+                        field.options.takeIf { it.isNotEmpty() }?.let { put("options", it) }
+                    }
+                    }
+            )
             worldLore(setting.lore).takeIf { it.isNotEmpty() }?.let { put("lore", it) }
         }
     }

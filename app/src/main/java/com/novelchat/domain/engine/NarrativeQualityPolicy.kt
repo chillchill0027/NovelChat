@@ -366,6 +366,30 @@ internal object NarrativeQualityPolicy {
             (repairedSeverity == currentSeverity && issueTextCount(repairedIssue) < issueTextCount(currentIssue))
     }
 
+    fun isTargetLengthImprovement(
+        currentNarrative: String,
+        repairedNarrative: String,
+        currentIssue: String?,
+        repairedIssue: String?
+    ): Boolean {
+        if (!hasOnlyTargetLengthIssue(currentIssue) || !hasOnlyTargetLengthIssue(repairedIssue)) {
+            return false
+        }
+        return targetLengthDistance(repairedNarrative) < targetLengthDistance(currentNarrative)
+    }
+
+    fun requiresLengthExpansion(issueText: String?): Boolean =
+        issueText?.split('；')
+            ?.filter { it.isNotBlank() }
+            ?.any { it.contains("正文低于目标篇幅") }
+            ?: false
+
+    fun containsTargetLengthIssue(issueText: String?): Boolean =
+        issueText?.split('；')
+            ?.filter { it.isNotBlank() }
+            ?.any { it.contains("正文低于目标篇幅") || it.contains("正文超过目标篇幅") }
+            ?: false
+
     fun isStyleOnlyIssue(issueText: String?): Boolean {
         val issues = issueText
             ?.split('；')
@@ -401,6 +425,24 @@ internal object NarrativeQualityPolicy {
             characterCount > TARGET_NARRATIVE_MAX_CHARS ->
                 "正文超过目标篇幅：当前约 $characterCount 字，目标为 $TARGET_NARRATIVE_MIN_CHARS-$TARGET_NARRATIVE_MAX_CHARS 字"
             else -> null
+        }
+    }
+
+    private fun hasOnlyTargetLengthIssue(issueText: String?): Boolean {
+        val issues = issueText?.split('；')?.filter { it.isNotBlank() }.orEmpty()
+        return issues.isNotEmpty() && issues.all {
+            it.contains("正文低于目标篇幅") || it.contains("正文超过目标篇幅")
+        }
+    }
+
+    private fun targetLengthDistance(narrative: String): Int {
+        val characterCount = narrative.count { !it.isWhitespace() }
+        return when {
+            characterCount < TARGET_NARRATIVE_MIN_CHARS ->
+                TARGET_NARRATIVE_MIN_CHARS - characterCount
+            characterCount > TARGET_NARRATIVE_MAX_CHARS ->
+                characterCount - TARGET_NARRATIVE_MAX_CHARS
+            else -> 0
         }
     }
 

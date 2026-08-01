@@ -289,103 +289,23 @@ class RpgGameEngine(
                 enforceTargetLength = true
             )
         }
-        var qualityAttempt = 0
-        var fullRepairAttempts = 0
-        var styleRepairAttempts = 0
-        while (!stateSyncOnly && narrativeIssue != null && qualityAttempt < 3) {
-            val styleOnlyRepair = NarrativeQualityPolicy.isStyleOnlyIssue(narrativeIssue)
-            if (
-                (styleOnlyRepair && styleRepairAttempts >= 2) ||
-                (!styleOnlyRepair && fullRepairAttempts >= 3)
-            ) {
-                break
-            }
-            qualityAttempt += 1
-            if (styleOnlyRepair) {
-                styleRepairAttempts += 1
-            } else {
-                fullRepairAttempts += 1
-            }
-            Log.w(
-                TAG,
-                "Narrative quality retry $qualityAttempt: issues=${narrativeIssue.issueCount()}; " +
-                    "mode=${if (styleOnlyRepair) "style" else "full"}; " +
-                    "responseLength=${narrativeResponse.length}; issue=${narrativeIssue.take(420)}"
+        if (!stateSyncOnly && narrativeIssue != null) {
+            val repairOutcome = repairNarrativeQuality(
+                initialResult = narrativeResult,
+                initialResponse = narrativeResponse,
+                initialIssue = narrativeIssue,
+                narrativePrompt = narrativePrompt,
+                userMessage = effectiveUserMessage,
+                currentGoal = narrativeGoal,
+                playerName = playerState.name,
+                identityAnchors = identityAnchors,
+                knownCharacters = allCharacters,
+                recentNarratives = recentNarratives,
+                onLoading = { emit(GameEvent.Loading(it)) }
             )
-            emit(GameEvent.Loading(
-                when {
-                    styleOnlyRepair -> "正在精简叙事..."
-                    qualityAttempt == 1 -> "正在补全遗漏剧情..."
-                    else -> "正在校正人物与叙事..."
-                }
-            ))
-            try {
-                val repairPrompt = if (styleOnlyRepair) {
-                    promptBuilder.buildNarrativeStyleRepairPrompt(
-                        rawResponse = narrativeResponse,
-                        issue = narrativeIssue
-                    )
-                } else if (fullRepairAttempts >= 2) {
-                    promptBuilder.buildNarrativeFocusedRepairPrompt(
-                        rawResponse = narrativeResponse,
-                        issue = narrativeIssue,
-                        userMessage = effectiveUserMessage,
-                        currentGoal = narrativeGoal,
-                        playerName = playerState.name,
-                        identityAnchors = identityAnchors
-                    )
-                } else {
-                    promptBuilder.buildNarrativeRepairPrompt(
-                        originalPrompt = narrativePrompt,
-                        rawResponse = narrativeResponse,
-                        issue = narrativeIssue
-                    )
-                }
-                val repairedResponse = requestNarrativeRepair(
-                    prompt = repairPrompt,
-                    temperature = if (styleOnlyRepair) 0.25f else 0.55f
-                )
-                val repairedResult = NarrativeIdentityAnchorPolicy.apply(
-                    result = NarrativeResultContentPolicy.normalize(
-                        jsonParser.parseNarrative(repairedResponse)
-                    ),
-                    anchors = identityAnchors,
-                    playerName = playerState.name
-                )
-                val repairedIssue = NarrativeQualityPolicy.coverageIssue(
-                    result = repairedResult,
-                    userMessage = effectiveUserMessage,
-                    knownCharacters = allCharacters,
-                    recentNarratives = recentNarratives,
-                    currentGoal = narrativeGoal,
-                    playerName = playerState.name,
-                    enforceTargetLength = true
-                )
-                val shouldAdoptRepair = repairedResult.narrative.isNotBlank() &&
-                    NarrativeQualityPolicy.isRepairImprovement(narrativeIssue, repairedIssue)
-                if (shouldAdoptRepair) {
-                    narrativeResult = repairedResult
-                    narrativeResponse = repairedResponse
-                    narrativeIssue = repairedIssue
-                }
-                if (narrativeIssue == null) {
-                    Log.d(TAG, "Narrative quality retry passed; narrativeLength=${repairedResult.narrative.length}")
-                } else {
-                    Log.w(TAG, "Narrative quality retry remained imperfect; issues=${narrativeIssue.issueCount()}")
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Narrative quality retry failed; keeping first response; type=${e.logType()}")
-                break
-            }
-        }
-        narrativeIssue?.let { issue ->
-            Log.w(
-                TAG,
-                "Narrative quality attempts exhausted: issues=${issue.issueCount()}; " +
-                    "issue=${issue.take(420)}"
-            )
+            narrativeResult = repairOutcome.result
+            narrativeResponse = repairOutcome.response
+            narrativeIssue = repairOutcome.issue
         }
         if (NarrativeQualityPolicy.containsAgencyViolation(narrativeIssue)) {
             Log.e(TAG, "Narrative rejected after repair because it overrides player agency")
@@ -395,6 +315,11 @@ class RpgGameEngine(
         if (NarrativeQualityPolicy.containsContinuationRepetition(narrativeIssue)) {
             Log.e(TAG, "Narrative rejected after repair because it repeats the prior turn")
             emit(GameEvent.Error("AI 重复了上一轮内容，本轮没有保存。点击重试即可再次生成。"))
+            return@flow
+        }
+        if (NarrativeQualityPolicy.containsTargetLengthIssue(narrativeIssue)) {
+            Log.e(TAG, "Narrative rejected after repair because target length is still unmet")
+            emit(GameEvent.Error("AI 连续修订后正文仍未达到 1000-1500 字，本轮没有保存。请重试这次行动。"))
             return@flow
         }
         if (NarrativeQualityPolicy.containsBlockingIssue(narrativeIssue)) {
@@ -480,6 +405,7 @@ class RpgGameEngine(
             introducedCharacters = narrativeResult.introducedCharacters
         )
         val essentialTaskPrompt = promptBuilder.buildEssentialStateSyncPrompt(
+            worldSetting = worldSetting,
             playerState = playerState,
             storyState = storyState,
             activeCharacters = stateSyncCharacters,
@@ -494,14 +420,22 @@ class RpgGameEngine(
             requestTaskAssignment(
                 taskPrompt,
                 essentialTaskPrompt,
-                routeLocality.taskAssignment
+                routeLocality.taskAssignment,
+                validate = { assignment ->
+                    TaskAssignmentQualityPolicy.requireNarrativeConsistency(
+                        worldSetting = worldSetting,
+                        narrative = "$effectiveUserMessage\n$finalNarrative",
+                        assignment = assignment
+                    )
+                }
             ) { assignment ->
                 assignment
                 .let { candidate ->
                     EndingScenePolicy.reconcile(
                         assignment = candidate,
                         endingScene = narrativeResult.endingScene,
-                        playerName = playerState.name
+                        playerName = playerState.name,
+                        sceneDescription = summaryText
                     )
                 }
                 .let { assignment ->
@@ -590,7 +524,7 @@ class RpgGameEngine(
         // 1. 主角状态更新
         taskAssignment.playerUpdate?.let { update ->
             emit(GameEvent.Loading("正在更新主角状态..."))
-            val updated = applyPlayerUpdate(playerState, update)
+            val updated = applyPlayerUpdate(playerState, update, worldSetting.characterFields)
             val mutation = applyPlayerMutationOnce(
                 characterId = characterId,
                 round = stateSyncRound,
@@ -629,14 +563,26 @@ class RpgGameEngine(
                     relationships = playerState.name.takeIf { it.isNotBlank() }?.let { playerName ->
                         mapOf(playerName to Relationship(stage = newChar.relationshipToPlayer.ifBlank { "初识" }))
                     } ?: emptyMap(),
+                    customAttributes = CharacterFieldPolicy.normalizeImportedAttributes(
+                        emptyMap(),
+                        worldSetting.characterFields,
+                        CharacterFieldDefinition.TARGET_NPC
+                    ),
                     createdBy = "ai", createdAt = currentTime, lastModified = currentTime
                 )
                 validateCharacterCard(
-                    rawInitialCard.copy(
-                        createdBy = rawInitialCard.createdBy.ifBlank { "ai" },
-                        createdAt = rawInitialCard.createdAt.ifBlank { currentTime },
-                        lastModified = currentTime
-                    )
+                    applyNpcAttributes(
+                        card = rawInitialCard.copy(
+                            createdBy = rawInitialCard.createdBy.ifBlank { "ai" },
+                            createdAt = rawInitialCard.createdAt.ifBlank { currentTime },
+                            lastModified = currentTime
+                        ),
+                        attributes = newChar.attributes,
+                        characterFields = worldSetting.characterFields,
+                        playerName = playerState.name.ifBlank { "主角" },
+                        includeManual = true
+                    ),
+                    worldSetting.characterFields
                 ).let { card ->
                     CharacterProfilePolicy.reconcile(
                         card = card,
@@ -674,7 +620,8 @@ class RpgGameEngine(
                             card = currentCard,
                             patch = patch,
                             playerName = playerState.name.ifBlank { "主角" },
-                            currentTime = currentTime
+                            currentTime = currentTime,
+                            characterFields = worldSetting.characterFields
                         )
                     }
                     if (mutation.applied) {
@@ -726,7 +673,8 @@ class RpgGameEngine(
                             card = currentCard,
                             patch = patch,
                             playerName = playerState.name.ifBlank { "主角" },
-                            currentTime = currentTime
+                            currentTime = currentTime,
+                            characterFields = worldSetting.characterFields
                         )
                     }
                     if (mutation.applied) {
@@ -850,6 +798,170 @@ class RpgGameEngine(
     }.flowOn(Dispatchers.IO)
 
     // ========== 辅助方法 ==========
+
+    private data class NarrativeRepairOutcome(
+        val result: NarrativeResult,
+        val response: String,
+        val issue: String?
+    )
+
+    private suspend fun repairNarrativeQuality(
+        initialResult: NarrativeResult,
+        initialResponse: String,
+        initialIssue: String,
+        narrativePrompt: String,
+        userMessage: String,
+        currentGoal: String,
+        playerName: String,
+        identityAnchors: List<NarrativeIdentityAnchor>,
+        knownCharacters: List<CharacterCard>,
+        recentNarratives: List<NarrativeEntry>,
+        onLoading: suspend (String) -> Unit
+    ): NarrativeRepairOutcome {
+        var result = initialResult
+        var response = initialResponse
+        var issue: String? = initialIssue
+        var qualityAttempt = 0
+        var fullRepairAttempts = 0
+        var styleRepairAttempts = 0
+        while (issue != null && qualityAttempt < 3) {
+            val styleOnlyRepair = NarrativeQualityPolicy.isStyleOnlyIssue(issue)
+            val lengthExpansion = NarrativeQualityPolicy.requiresLengthExpansion(issue)
+            if (
+                (styleOnlyRepair && styleRepairAttempts >= 2) ||
+                (!styleOnlyRepair && fullRepairAttempts >= 3)
+            ) {
+                break
+            }
+            qualityAttempt += 1
+            if (styleOnlyRepair) styleRepairAttempts += 1 else fullRepairAttempts += 1
+            Log.w(
+                TAG,
+                "Narrative quality retry $qualityAttempt: issues=${issue.issueCount()}; " +
+                    "mode=${if (lengthExpansion) "expand" else if (styleOnlyRepair) "style" else "full"}; " +
+                    "responseLength=${response.length}; issue=${issue.take(420)}"
+            )
+            onLoading(
+                when {
+                    lengthExpansion -> "正在扩写叙事..."
+                    styleOnlyRepair -> "正在精简叙事..."
+                    qualityAttempt == 1 -> "正在补全遗漏剧情..."
+                    else -> "正在校正人物与叙事..."
+                }
+            )
+            try {
+                val repairPrompt = buildQualityRepairPrompt(
+                    lengthExpansion = lengthExpansion,
+                    styleOnlyRepair = styleOnlyRepair,
+                    fullRepairAttempts = fullRepairAttempts,
+                    narrativeResponse = response,
+                    narrativeIssue = issue,
+                    narrativePrompt = narrativePrompt,
+                    userMessage = userMessage,
+                    currentGoal = currentGoal,
+                    playerName = playerName,
+                    identityAnchors = identityAnchors
+                )
+                val repairedResponse = requestNarrativeRepair(
+                    prompt = repairPrompt,
+                    temperature = when {
+                        lengthExpansion -> 0.45f
+                        styleOnlyRepair -> 0.25f
+                        else -> 0.55f
+                    }
+                )
+                val repairedResult = NarrativeIdentityAnchorPolicy.apply(
+                    result = NarrativeResultContentPolicy.normalize(
+                        jsonParser.parseNarrative(repairedResponse)
+                    ),
+                    anchors = identityAnchors,
+                    playerName = playerName
+                )
+                val repairedIssue = NarrativeQualityPolicy.coverageIssue(
+                    result = repairedResult,
+                    userMessage = userMessage,
+                    knownCharacters = knownCharacters,
+                    recentNarratives = recentNarratives,
+                    currentGoal = currentGoal,
+                    playerName = playerName,
+                    enforceTargetLength = true
+                )
+                if (shouldAdoptNarrativeRepair(result, repairedResult, issue, repairedIssue)) {
+                    result = repairedResult
+                    response = repairedResponse
+                    issue = repairedIssue
+                }
+                if (issue == null) {
+                    Log.d(TAG, "Narrative quality retry passed; narrativeLength=${repairedResult.narrative.length}")
+                } else {
+                    Log.w(TAG, "Narrative quality retry remained imperfect; issues=${issue.issueCount()}")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Narrative quality retry failed; keeping best response; type=${e.logType()}")
+                break
+            }
+        }
+        issue?.let {
+            Log.w(
+                TAG,
+                "Narrative quality attempts exhausted: issues=${it.issueCount()}; issue=${it.take(420)}"
+            )
+        }
+        return NarrativeRepairOutcome(result, response, issue)
+    }
+
+    private fun buildQualityRepairPrompt(
+        lengthExpansion: Boolean,
+        styleOnlyRepair: Boolean,
+        fullRepairAttempts: Int,
+        narrativeResponse: String,
+        narrativeIssue: String,
+        narrativePrompt: String,
+        userMessage: String,
+        currentGoal: String,
+        playerName: String,
+        identityAnchors: List<NarrativeIdentityAnchor>
+    ): String = when {
+        lengthExpansion -> promptBuilder.buildNarrativeLengthExpansionPrompt(
+            rawResponse = narrativeResponse,
+            issue = narrativeIssue
+        )
+        styleOnlyRepair -> promptBuilder.buildNarrativeStyleRepairPrompt(
+            rawResponse = narrativeResponse,
+            issue = narrativeIssue
+        )
+        fullRepairAttempts >= 2 -> promptBuilder.buildNarrativeFocusedRepairPrompt(
+            rawResponse = narrativeResponse,
+            issue = narrativeIssue,
+            userMessage = userMessage,
+            currentGoal = currentGoal,
+            playerName = playerName,
+            identityAnchors = identityAnchors
+        )
+        else -> promptBuilder.buildNarrativeRepairPrompt(
+            originalPrompt = narrativePrompt,
+            rawResponse = narrativeResponse,
+            issue = narrativeIssue
+        )
+    }
+
+    private fun shouldAdoptNarrativeRepair(
+        currentResult: NarrativeResult,
+        repairedResult: NarrativeResult,
+        currentIssue: String?,
+        repairedIssue: String?
+    ): Boolean {
+        if (repairedResult.narrative.isBlank()) return false
+        return NarrativeQualityPolicy.isRepairImprovement(currentIssue, repairedIssue) ||
+            NarrativeQualityPolicy.isTargetLengthImprovement(
+                currentNarrative = currentResult.narrative,
+                repairedNarrative = repairedResult.narrative,
+                currentIssue = currentIssue,
+                repairedIssue = repairedIssue
+            )
+    }
 
     private fun requestNarrative(
         messages: List<ChatMessage>,
@@ -1508,6 +1620,7 @@ class RpgGameEngine(
         taskPrompt: String,
         essentialTaskPrompt: String,
         isLocalEndpoint: Boolean,
+        validate: (TaskAssignment) -> TaskAssignment,
         normalize: (TaskAssignment) -> TaskAssignment
     ): TaskAssignment {
         var prompt = if (isLocalEndpoint) essentialTaskPrompt else taskPrompt
@@ -1517,6 +1630,7 @@ class RpgGameEngine(
             TaskAssignmentPromptMode.FULL
         }
         var lastError: Exception? = null
+        var accumulated: TaskAssignment? = null
 
         repeat(3) { attempt ->
             var response: String? = null
@@ -1532,9 +1646,10 @@ class RpgGameEngine(
                     jsonMode = true,
                     stage = AiCallStage.TASK_ASSIGNMENT
                 )
-                return TaskAssignmentQualityPolicy.requireMeaningful(
-                    normalize(jsonParser.parseTaskAssignment(response))
-                )
+                val candidate = normalize(jsonParser.parseTaskAssignment(response))
+                val merged = TaskAssignmentMergePolicy.merge(accumulated, candidate)
+                accumulated = merged
+                return TaskAssignmentQualityPolicy.requireMeaningful(validate(merged))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 lastError = e
@@ -1542,7 +1657,8 @@ class RpgGameEngine(
                     TAG,
                     "Task assignment attempt ${attempt + 1} failed in $mode; " +
                         "responseLength=${response?.length ?: 0}; type=${e.logType()}; " +
-                        "parseFailure=${(e as? TaskAssignmentParseException)?.failure ?: "NONE"}"
+                        "parseFailure=${(e as? TaskAssignmentParseException)?.failure ?: "NONE"}; " +
+                        "stateIssues=${(e as? IncompleteStateSyncException)?.missingFields?.joinToString(",") ?: "NONE"}"
                 )
                 if (attempt == 2) return@repeat
 
@@ -1556,6 +1672,14 @@ class RpgGameEngine(
                 } else {
                     prompt = buildString {
                         append(essentialTaskPrompt)
+                        if (e is IncompleteStateSyncException) {
+                            appendLine()
+                            appendLine(
+                                "【必须修复的状态遗漏】正文已明确触发以下字段：" +
+                                    e.missingFields.joinToString("、") +
+                                    "。逐项核对正文结尾；角色字段在 player_update.changes 中写最终值，场景字段写入 story_update。即使最终值不变也必须显式写出。"
+                            )
+                        }
                         if (mode == TaskAssignmentPromptMode.ESSENTIAL) {
                             appendLine()
                             appendLine("【再次强调】上次必要同步仍不可执行；必须依据正文返回真实变化，或用具体理由声明 no_change。")
@@ -1608,7 +1732,11 @@ class RpgGameEngine(
         }.distinct()
     }
 
-    private fun applyPlayerUpdate(player: PlayerState, update: PlayerUpdate): PlayerState {
+    private fun applyPlayerUpdate(
+        player: PlayerState,
+        update: PlayerUpdate,
+        characterFields: List<CharacterFieldDefinition>
+    ): PlayerState {
         val changes = update.changes
         var updatedInventory = player.inventory
         changes.inventory.forEach { invChange ->
@@ -1622,7 +1750,7 @@ class RpgGameEngine(
             player.relationships,
             changes.relationships
         )
-        return player.copy(
+        val updated = player.copy(
             inventory = updatedInventory,
             relationships = updatedRelationships,
             questLog = changes.questLog ?: player.questLog,
@@ -1630,12 +1758,19 @@ class RpgGameEngine(
                 player.storyProgress,
                 changes.storyProgress
             ),
-            physicalState = changes.physicalState?.let { applyPhysicalPatch(player.physicalState, it) }
+            physicalState = changes.physicalState?.let {
+                applyPhysicalPatch(player.physicalState, it, characterFields)
+            }
                 ?: player.physicalState,
-            mentalState = changes.mentalState?.let { applyMentalPatch(player.mentalState, it) }
+            mentalState = changes.mentalState?.let {
+                applyMentalPatch(player.mentalState, it, characterFields)
+            }
                 ?: player.mentalState,
-            cv = changes.risk?.coerceIn(0, 100) ?: player.cv
+            cv = changes.risk?.let {
+                numberFieldValue(characterFields, "risk", it, player.cv)
+            } ?: player.cv
         )
+        return applyPlayerAttributes(updated, changes.attributes, characterFields)
     }
 
     private fun applyStoryUpdate(current: StoryState, update: StoryStateUpdate): StoryState {
@@ -1644,6 +1779,8 @@ class RpgGameEngine(
             timeOfDay = update.timeOfDay?.takeIf { it.isNotBlank() } ?: current.timeOfDay,
             weather = update.weather?.takeIf { it.isNotBlank() } ?: current.weather,
             mood = update.mood?.takeIf { it.isNotBlank() } ?: current.mood,
+            sceneDescription = update.sceneDescription?.takeIf { it.isNotBlank() }
+                ?: current.sceneDescription,
             activeCharacters = update.activeCharacters
                 ?.filter { it.isNotBlank() }
                 ?.distinct()
@@ -1659,7 +1796,8 @@ class RpgGameEngine(
         card: CharacterCard,
         patch: CharacterStatePatch,
         playerName: String,
-        currentTime: String
+        currentTime: String,
+        characterFields: List<CharacterFieldDefinition>
     ): CharacterCard {
         val boundedPatch = CharacterStatePatchContentPolicy.normalize(patch)
         var updatedInventory = card.inventory
@@ -1687,64 +1825,119 @@ class RpgGameEngine(
             put(playerName, updatedRelationship)
         }
 
-        return CharacterProfilePolicy.reconcile(validateCharacterCard(
-            card.copy(
+        val updatedCard = card.copy(
                 emotion = boundedPatch.emotion?.takeIf { it.isNotBlank() } ?: card.emotion,
                 favor = updatedRelationship.favor,
-                physicalState = boundedPatch.physicalState?.let { applyPhysicalPatch(card.physicalState, it) }
+                physicalState = boundedPatch.physicalState?.let {
+                    applyPhysicalPatch(card.physicalState, it, characterFields)
+                }
                     ?: card.physicalState,
-                mentalState = boundedPatch.mentalState?.let { applyMentalPatch(card.mentalState, it) }
+                mentalState = boundedPatch.mentalState?.let {
+                    applyMentalPatch(card.mentalState, it, characterFields)
+                }
                     ?: card.mentalState,
                 relationships = updatedRelationships,
                 inventory = updatedInventory,
                 lastModified = currentTime
             )
-        ), playerName)
+        val withAttributes = applyNpcAttributes(
+            updatedCard,
+            boundedPatch.attributes,
+            characterFields,
+            playerName
+        )
+        return CharacterProfilePolicy.reconcile(
+            validateCharacterCard(withAttributes, characterFields),
+            playerName
+        )
     }
 
-    private fun applyPhysicalPatch(current: PhysicalState, patch: PhysicalStatePatch): PhysicalState {
+    private fun applyPhysicalPatch(
+        current: PhysicalState,
+        patch: PhysicalStatePatch,
+        characterFields: List<CharacterFieldDefinition>
+    ): PhysicalState {
         return current.copy(
-            stamina = patch.stamina?.coerceIn(0, 100) ?: current.stamina,
-            health = patch.health?.takeIf { it.isNotBlank() }?.let {
-                validateEnum(it, listOf("良好", "健康", "轻伤", "重伤", "濒死"), current.health)
-            } ?: current.health,
+            stamina = patch.stamina?.let {
+                numberFieldValue(characterFields, "stamina", it, current.stamina)
+            } ?: current.stamina,
+            health = textFieldValue(characterFields, "health", patch.health, current.health),
             injuries = patch.injuries ?: current.injuries,
-            fatigue = patch.fatigue?.takeIf { it.isNotBlank() }?.let {
-                validateEnum(it, listOf("无", "轻度", "中度", "重度"), current.fatigue)
-            } ?: current.fatigue,
-            hunger = patch.hunger?.takeIf { it.isNotBlank() }?.let {
-                validateEnum(it, listOf("不饿", "微饿", "饥饿", "极度饥饿"), current.hunger)
-            } ?: current.hunger,
-            pain = patch.pain?.takeIf { it.isNotBlank() }?.let {
-                validateEnum(it, listOf("无", "轻度", "中度", "重度"), current.pain)
-            } ?: current.pain
+            fatigue = textFieldValue(characterFields, "fatigue", patch.fatigue, current.fatigue),
+            hunger = textFieldValue(characterFields, "hunger", patch.hunger, current.hunger),
+            pain = textFieldValue(characterFields, "pain", patch.pain, current.pain)
         )
     }
 
-    private fun applyMentalPatch(current: MentalState, patch: MentalStatePatch): MentalState {
+    private fun applyMentalPatch(
+        current: MentalState,
+        patch: MentalStatePatch,
+        characterFields: List<CharacterFieldDefinition>
+    ): MentalState {
         return current.copy(
-            mood = patch.mood?.takeIf { it.isNotBlank() } ?: current.mood,
-            stress = patch.stress?.takeIf { it.isNotBlank() }?.let {
-                validateEnum(it, listOf("低", "中", "高"), current.stress)
-            } ?: current.stress,
-            focus = patch.focus?.takeIf { it.isNotBlank() } ?: current.focus,
-            currentThoughts = patch.currentThoughts?.takeIf { it.isNotBlank() } ?: current.currentThoughts
+            mood = textFieldValue(characterFields, "mood", patch.mood, current.mood),
+            stress = textFieldValue(characterFields, "stress", patch.stress, current.stress),
+            focus = textFieldValue(characterFields, "focus", patch.focus, current.focus),
+            currentThoughts = textFieldValue(
+                characterFields,
+                "current_thoughts",
+                patch.currentThoughts,
+                current.currentThoughts
+            )
         )
     }
 
-    private fun validateCharacterCard(card: CharacterCard): CharacterCard {
+    private fun validateCharacterCard(
+        card: CharacterCard,
+        characterFields: List<CharacterFieldDefinition>
+    ): CharacterCard {
         val namedCard = CharacterNamingPolicy.normalizeNpcCard(card)
         return namedCard.copy(
-            age = card.age.coerceIn(0, 999),
+            age = numberFieldValue(characterFields, "age", card.age, 0),
             physicalState = namedCard.physicalState.copy(
-                stamina = namedCard.physicalState.stamina.coerceIn(0, 100),
-                health = validateEnum(namedCard.physicalState.health, listOf("良好", "轻伤", "重伤", "濒死", "健康"), "良好"),
-                fatigue = validateEnum(namedCard.physicalState.fatigue, listOf("无", "轻度", "中度", "重度"), "无"),
-                hunger = validateEnum(namedCard.physicalState.hunger, listOf("不饿", "微饿", "饥饿", "极度饥饿"), "不饿"),
-                pain = validateEnum(namedCard.physicalState.pain, listOf("无", "轻度", "中度", "重度"), "无")
+                stamina = numberFieldValue(
+                    characterFields,
+                    "stamina",
+                    namedCard.physicalState.stamina,
+                    100
+                ),
+                health = textFieldValue(
+                    characterFields,
+                    "health",
+                    namedCard.physicalState.health,
+                    "良好"
+                ),
+                fatigue = textFieldValue(
+                    characterFields,
+                    "fatigue",
+                    namedCard.physicalState.fatigue,
+                    "无"
+                ),
+                hunger = textFieldValue(
+                    characterFields,
+                    "hunger",
+                    namedCard.physicalState.hunger,
+                    "不饿"
+                ),
+                pain = textFieldValue(
+                    characterFields,
+                    "pain",
+                    namedCard.physicalState.pain,
+                    "无"
+                )
             ),
             mentalState = namedCard.mentalState.copy(
-                stress = validateEnum(namedCard.mentalState.stress, listOf("低", "中", "高"), "低")
+                stress = textFieldValue(
+                    characterFields,
+                    "stress",
+                    namedCard.mentalState.stress,
+                    "低"
+                )
+            ),
+            customAttributes = CharacterFieldPolicy.normalizeImportedAttributes(
+                namedCard.customAttributes,
+                characterFields,
+                CharacterFieldDefinition.TARGET_NPC
             ),
             relationships = namedCard.relationships.mapValues { (_, rel) ->
                 rel.copy(favor = rel.favor.coerceIn(-100, 100), trust = rel.trust.coerceIn(0, 100))
@@ -1753,8 +1946,191 @@ class RpgGameEngine(
         )
     }
 
-    private fun validateEnum(value: String, validValues: List<String>, defaultVal: String): String {
-        return if (value in validValues) value else defaultVal
+    private fun applyPlayerAttributes(
+        player: PlayerState,
+        attributes: Map<String, String>,
+        characterFields: List<CharacterFieldDefinition>
+    ): PlayerState {
+        val values = mutableAttributeUpdates(
+            attributes,
+            characterFields,
+            CharacterFieldDefinition.TARGET_PLAYER
+        )
+        if (values.isEmpty()) return player
+
+        var updated = player
+        values.forEach { (field, value) ->
+            updated = when (field.key) {
+                "age" -> updated.copy(age = value.toIntOrNull() ?: updated.age)
+                "gender" -> updated.copy(gender = value)
+                "race" -> updated.copy(race = value)
+                "occupation" -> updated.copy(class_ = value)
+                "appearance" -> updated.copy(appearance = value)
+                "personality" -> updated.copy(personality = value)
+                "background" -> updated.copy(background = value)
+                "skills" -> {
+                    val existing = updated.skills.associateBy { it.name }
+                    val skills = value.split('、').map(String::trim).filter(String::isNotBlank)
+                        .map { name -> existing[name] ?: PlayerSkill(name = name, level = 1) }
+                    updated.copy(skills = skills)
+                }
+                "level" -> updated.copy(level = value.toIntOrNull() ?: updated.level)
+                "charm" -> updated.copy(charm = value.toIntOrNull() ?: updated.charm)
+                "action_skill" -> updated.copy(
+                    huntingSkill = value.toIntOrNull() ?: updated.huntingSkill
+                )
+                "social_rank" -> updated.copy(socialRank = value)
+                "luck" -> updated.copy(luck = value.toIntOrNull() ?: updated.luck)
+                "willpower" -> updated.copy(alpha = value.toIntOrNull() ?: updated.alpha)
+                "resilience" -> updated.copy(
+                    resistance = value.toIntOrNull() ?: updated.resistance
+                )
+                "stamina" -> updated.copy(
+                    physicalState = updated.physicalState.copy(
+                        stamina = value.toIntOrNull() ?: updated.physicalState.stamina
+                    )
+                )
+                "health" -> updated.copy(physicalState = updated.physicalState.copy(health = value))
+                "fatigue" -> updated.copy(physicalState = updated.physicalState.copy(fatigue = value))
+                "hunger" -> updated.copy(physicalState = updated.physicalState.copy(hunger = value))
+                "pain" -> updated.copy(physicalState = updated.physicalState.copy(pain = value))
+                "mood" -> updated.copy(mentalState = updated.mentalState.copy(mood = value))
+                "stress" -> updated.copy(mentalState = updated.mentalState.copy(stress = value))
+                "focus" -> updated.copy(mentalState = updated.mentalState.copy(focus = value))
+                "current_thoughts" -> updated.copy(
+                    mentalState = updated.mentalState.copy(currentThoughts = value)
+                )
+                "risk" -> updated.copy(cv = value.toIntOrNull() ?: updated.cv)
+                "name" -> updated
+                else -> updated
+            }
+        }
+        return updated.copy(
+            customAttributes = CharacterFieldPolicy.mergeCustomAttributes(
+                current = updated.customAttributes,
+                patch = attributes,
+                configured = characterFields,
+                target = CharacterFieldDefinition.TARGET_PLAYER
+            )
+        )
+    }
+
+    private fun applyNpcAttributes(
+        card: CharacterCard,
+        attributes: Map<String, String>,
+        characterFields: List<CharacterFieldDefinition>,
+        playerName: String,
+        includeManual: Boolean = false
+    ): CharacterCard {
+        val values = mutableAttributeUpdates(
+            attributes,
+            characterFields,
+            CharacterFieldDefinition.TARGET_NPC,
+            includeManual
+        )
+        if (values.isEmpty()) return card
+
+        var updated = card
+        values.forEach { (field, value) ->
+            updated = when (field.key) {
+                "age" -> updated.copy(age = value.toIntOrNull() ?: updated.age)
+                "gender" -> updated.copy(gender = value)
+                "race" -> updated.copy(race = value)
+                "occupation" -> updated.copy(occupation = value)
+                "appearance" -> updated.copy(appearance = value)
+                "personality" -> updated.copy(personality = value)
+                "background" -> updated.copy(background = value)
+                "rarity" -> updated.copy(rarity = value)
+                "action_tendency" -> updated.copy(libido = value.toIntOrNull() ?: updated.libido)
+                "defense_threshold" -> updated.copy(
+                    threshold = value.toIntOrNull() ?: updated.threshold
+                )
+                "relationship_status" -> updated.copy(relationshipStatus = value)
+                "hidden_clue" -> updated.copy(kink = value)
+                "stamina" -> updated.copy(
+                    physicalState = updated.physicalState.copy(
+                        stamina = value.toIntOrNull() ?: updated.physicalState.stamina
+                    )
+                )
+                "health" -> updated.copy(physicalState = updated.physicalState.copy(health = value))
+                "fatigue" -> updated.copy(physicalState = updated.physicalState.copy(fatigue = value))
+                "hunger" -> updated.copy(physicalState = updated.physicalState.copy(hunger = value))
+                "pain" -> updated.copy(physicalState = updated.physicalState.copy(pain = value))
+                "mood" -> updated.copy(
+                    emotion = value,
+                    mentalState = updated.mentalState.copy(mood = value)
+                )
+                "stress" -> updated.copy(mentalState = updated.mentalState.copy(stress = value))
+                "focus" -> updated.copy(mentalState = updated.mentalState.copy(focus = value))
+                "current_thoughts" -> updated.copy(
+                    mentalState = updated.mentalState.copy(currentThoughts = value)
+                )
+                "relationship_stage", "favor", "trust" -> {
+                    val current = updated.relationships[playerName]
+                        ?: Relationship(favor = updated.favor, stage = updated.relationshipStatus)
+                    val relationship = when (field.key) {
+                        "relationship_stage" -> current.copy(stage = value)
+                        "favor" -> current.copy(favor = value.toIntOrNull() ?: current.favor)
+                        else -> current.copy(trust = value.toIntOrNull() ?: current.trust)
+                    }
+                    updated.copy(
+                        favor = relationship.favor,
+                        relationships = updated.relationships + (playerName to relationship)
+                    )
+                }
+                "name" -> updated
+                else -> updated
+            }
+        }
+        return updated.copy(
+            customAttributes = CharacterFieldPolicy.mergeCustomAttributes(
+                current = updated.customAttributes,
+                patch = attributes,
+                configured = characterFields,
+                target = CharacterFieldDefinition.TARGET_NPC
+            )
+        )
+    }
+
+    private fun mutableAttributeUpdates(
+        attributes: Map<String, String>,
+        characterFields: List<CharacterFieldDefinition>,
+        target: String,
+        includeManual: Boolean = false
+    ): List<Pair<CharacterFieldDefinition, String>> {
+        if (attributes.isEmpty()) return emptyList()
+        val definitions = CharacterFieldPolicy.effectiveDefinitions(characterFields)
+            .filter { field ->
+                (includeManual || field.updateMode != CharacterFieldDefinition.UPDATE_MANUAL) &&
+                    CharacterFieldPolicy.appliesTo(field, target)
+            }
+            .associateBy { it.key }
+        return attributes.mapNotNull { (rawKey, rawValue) ->
+            val field = definitions[rawKey.trim()] ?: return@mapNotNull null
+            CharacterFieldPolicy.sanitizeValue(field, rawValue)?.let { field to it }
+        }
+    }
+
+    private fun numberFieldValue(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        value: Int,
+        fallback: Int
+    ): Int {
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key) ?: return value
+        return CharacterFieldPolicy.sanitizeValue(field, value.toString())?.toIntOrNull() ?: fallback
+    }
+
+    private fun textFieldValue(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        value: String?,
+        fallback: String
+    ): String {
+        val raw = value?.trim().orEmpty()
+        if (raw.isBlank()) return fallback
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key) ?: return raw
+        return CharacterFieldPolicy.sanitizeValue(field, raw) ?: fallback
     }
 
     private fun addItems(inventory: List<InventoryItem>, itemName: String, quantity: Int): List<InventoryItem> {

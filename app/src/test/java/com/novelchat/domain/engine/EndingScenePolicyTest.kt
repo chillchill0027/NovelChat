@@ -22,11 +22,13 @@ class EndingScenePolicyTest {
                 location = "街角彩票店",
                 presentCharacters = listOf("林克", "老周", "老周")
             ),
-            playerName = "林克"
+            playerName = "林克",
+            sceneDescription = "林克在柜台前等待，老周正在核对票面。"
         )
 
         assertEquals("街角彩票店", result.storyUpdate?.currentLocation)
         assertEquals(listOf("老周"), result.storyUpdate?.activeCharacters)
+        assertEquals("林克在柜台前等待，老周正在核对票面。", result.storyUpdate?.sceneDescription)
     }
 
     @Test

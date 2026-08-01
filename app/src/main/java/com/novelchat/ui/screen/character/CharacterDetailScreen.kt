@@ -16,7 +16,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.novelchat.data.model.CharacterCard
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.ui.theme.*
+import com.novelchat.ui.viewmodel.CharacterFieldDisplay
+import com.novelchat.ui.viewmodel.CharacterFieldDisplayPolicy
 import com.novelchat.ui.viewmodel.CharacterViewModel
 import com.novelchat.ui.viewmodel.NpcCardPolicy
 
@@ -71,8 +74,6 @@ fun CharacterDetailScreen(
                 Text("未找到角色", color = DimText)
             }
         } else {
-            val relationship = NpcCardPolicy.relationshipSnapshot(card, state.playerName)
-            val playerLabel = state.playerName.ifBlank { "主角" }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -81,42 +82,20 @@ fun CharacterDetailScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 基本信息
-                Section("基本信息") {
-                    DetailRow("姓名", card.name)
-                    DetailRow("种族", card.race.ifBlank { "未知" })
-                    DetailRow("年龄", card.age.takeIf { it > 0 }?.toString() ?: "未知")
-                    DetailRow("性别", card.gender.ifBlank { "未知" })
-                    DetailRow("职业", card.occupation.ifBlank { "身份未知" })
-                    DetailRow("状态", when (card.status) {
+                CharacterFieldSections(
+                    CharacterFieldDisplayPolicy.npcDetails(
+                        card,
+                        state.playerName,
+                        state.characterFields
+                    )
+                )
+
+                Section("系统状态") {
+                    DetailRow("出场状态", when (card.status) {
                         "active" -> "活跃"
                         "pool" -> "待机"
                         else -> card.status.ifBlank { "未知" }
                     })
-                }
-
-                Section("与${playerLabel}的关系") {
-                    DetailRow("关系阶段", relationship.stage)
-                    DetailRow(
-                        "好感",
-                        if (relationship.favor >= 0) "+${relationship.favor}" else relationship.favor.toString()
-                    )
-                    DetailRow("信任", relationship.trust?.let { "$it/100" } ?: "未知")
-                }
-
-                // 外貌
-                Section("外貌描述") {
-                    Text(card.appearance.ifBlank { "无" }, color = GoldColor, fontSize = 13.sp)
-                }
-
-                // 性格
-                Section("性格") {
-                    Text(card.personality.ifBlank { "无" }, color = GoldColor, fontSize = 13.sp)
-                }
-
-                // 背景
-                Section("背景故事") {
-                    Text(card.background.ifBlank { "无" }, color = GoldColor, fontSize = 13.sp)
                 }
 
                 if (card.lore.hasContent()) {
@@ -156,21 +135,6 @@ fun CharacterDetailScreen(
                     }
                 }
 
-                // 身体状态
-                Section("身体状态") {
-                    DetailRow("体力", "${card.physicalState.stamina.coerceIn(0, 100)}/100")
-                    DetailRow("健康", card.physicalState.health.ifBlank { "未知" })
-                    DetailRow("疲劳", card.physicalState.fatigue.ifBlank { "未知" })
-                    DetailRow("饥饿", card.physicalState.hunger.ifBlank { "未知" })
-                }
-
-                // 心理状态
-                Section("心理状态") {
-                    DetailRow("情绪", card.emotion.ifBlank { card.mentalState.mood.ifBlank { "平静" } })
-                    DetailRow("压力", card.mentalState.stress.ifBlank { "未知" })
-                    DetailRow("关注", card.mentalState.focus.ifBlank { "暂无" })
-                }
-
                 // 关系
                 val otherRelationships = card.relationships.filterKeys { name ->
                     val normalizedName = name.trim()
@@ -202,6 +166,36 @@ fun CharacterDetailScreen(
                 }
 
                 Spacer(Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterFieldSections(fields: List<CharacterFieldDisplay>) {
+    val titles = linkedMapOf(
+        CharacterFieldDefinition.GROUP_STATUS to "当前状态",
+        CharacterFieldDefinition.GROUP_RELATIONSHIP to "与主角的关系",
+        CharacterFieldDefinition.GROUP_ABILITY to "能力与成长",
+        CharacterFieldDefinition.GROUP_PROFILE to "人物档案",
+        CharacterFieldDefinition.GROUP_IDENTITY to "基本信息"
+    )
+    val grouped = fields.groupBy { it.definition.group }
+    titles.forEach { (group, title) ->
+        val groupFields = grouped[group].orEmpty()
+        if (groupFields.isEmpty()) return@forEach
+        Section(title) {
+            groupFields.forEach { field ->
+                if (
+                    field.definition.valueType in setOf(
+                        CharacterFieldDefinition.TYPE_TEXT,
+                        CharacterFieldDefinition.TYPE_LIST
+                    ) && field.rawValue.length > 48
+                ) {
+                    DetailBlock(field.definition.label, field.rawValue)
+                } else {
+                    DetailRow(field.definition.label, field.value)
+                }
             }
         }
     }

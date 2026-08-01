@@ -2,6 +2,7 @@ package com.novelchat.data.remote.model
 
 import com.google.gson.annotations.SerializedName
 import com.novelchat.data.model.CharacterLore
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.data.model.InventoryItem
 import com.novelchat.data.model.MentalState
 import com.novelchat.data.model.PhysicalState
@@ -37,7 +38,8 @@ data class ParsedWorldSetting(
     @SerializedName("tone") val tone: String = "",
     @SerializedName("forbidden") val forbidden: List<String> = emptyList(),
     @SerializedName("description") val description: String = "",
-    @SerializedName("lore") val lore: WorldLore = WorldLore()
+    @SerializedName("lore") val lore: WorldLore = WorldLore(),
+    @SerializedName("character_fields") val characterFields: List<CharacterFieldDefinition> = emptyList()
 )
 
 data class ParsedPlayer(
@@ -50,9 +52,17 @@ data class ParsedPlayer(
     @SerializedName("background") val background: String = "",
     @SerializedName("appearance") val appearance: String = "",
     @SerializedName("skills") val skills: List<String> = emptyList(),
+    @SerializedName("level") val level: Int = 1,
+    @SerializedName("charm") val charm: Int = 25,
+    @SerializedName("action_skill") val actionSkill: Int = 10,
+    @SerializedName("social_rank") val socialRank: String = "E",
+    @SerializedName("luck") val luck: Int = 50,
+    @SerializedName("willpower") val willpower: Int = 15,
+    @SerializedName("resilience") val resilience: Int = 20,
     @SerializedName("lore") val lore: CharacterLore = CharacterLore(),
     @SerializedName("physical_state") val physicalState: PhysicalState = PhysicalState(),
     @SerializedName("mental_state") val mentalState: MentalState = MentalState(),
+    @SerializedName("custom_attributes") val customAttributes: Map<String, String> = emptyMap(),
     @SerializedName("inventory") val inventory: List<InventoryItem> = emptyList()
 )
 
@@ -81,6 +91,7 @@ data class ParsedNpc(
     @SerializedName("lore") val lore: CharacterLore = CharacterLore(),
     @SerializedName("physical_state") val physicalState: PhysicalState = PhysicalState(),
     @SerializedName("mental_state") val mentalState: MentalState = MentalState(),
+    @SerializedName("custom_attributes") val customAttributes: Map<String, String> = emptyMap(),
     @SerializedName("inventory") val inventory: List<InventoryItem> = emptyList()
 )
 

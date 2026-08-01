@@ -27,6 +27,7 @@ internal object PlayerPromptSnapshotPolicy {
             "skills" to player.skills,
             "physical_state" to player.physicalState,
             "mental_state" to player.mentalState,
+            "custom_attributes" to player.customAttributes,
             "relationships" to player.relationships,
             "inventory" to player.inventory,
             "quest_log" to player.questLog,

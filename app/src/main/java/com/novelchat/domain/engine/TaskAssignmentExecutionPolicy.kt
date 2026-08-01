@@ -2,6 +2,7 @@ package com.novelchat.domain.engine
 
 import com.novelchat.data.model.InventoryChange
 import com.novelchat.data.model.ItemTransfer
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.MentalStatePatch
 import com.novelchat.data.model.PhysicalStatePatch
 import com.novelchat.data.model.PlayerChanges
@@ -95,7 +96,7 @@ internal object TaskAssignmentExecutionPolicy {
                 .map { character ->
                     character.copy(
                         name = WorldbookContentPolicy.normalizeName(character.name),
-                        age = character.age.takeIf { it in 1..120 } ?: 0,
+                        age = character.age.coerceIn(0, CharacterFieldPolicy.MAX_NUMERIC_VALUE),
                         gender = short(character.gender),
                         race = short(character.race),
                         occupation = short(character.occupation),
@@ -104,6 +105,7 @@ internal object TaskAssignmentExecutionPolicy {
                         appearance = character.appearance.trim().take(MAX_PROFILE_LENGTH),
                         relationshipToPlayer = short(character.relationshipToPlayer),
                         firstAppearance = character.firstAppearance.trim().take(MAX_REASON_LENGTH),
+                        attributes = sanitizeAttributes(character.attributes),
                         initialStatus = null
                     )
                 }
@@ -211,7 +213,8 @@ internal object TaskAssignmentExecutionPolicy {
             storyProgress = changes.storyProgress?.let(::sanitizeStoryProgress),
             physicalState = changes.physicalState?.let(::sanitizePhysicalState),
             mentalState = changes.mentalState?.let(::sanitizeMentalState),
-            risk = changes.risk?.coerceIn(0, 100)
+            attributes = sanitizeAttributes(changes.attributes),
+            risk = changes.risk?.coerceIn(0, CharacterFieldPolicy.MAX_NUMERIC_VALUE)
         )
     }
 
@@ -253,6 +256,17 @@ internal object TaskAssignmentExecutionPolicy {
             focus = state.focus?.let { it.trim().take(MAX_PROFILE_LENGTH) },
             currentThoughts = state.currentThoughts?.let { it.trim().take(MAX_PROFILE_LENGTH) }
         )
+    }
+
+    private fun sanitizeAttributes(values: Map<String, String>): Map<String, String> {
+        return values.entries.asSequence()
+            .mapNotNull { (rawKey, rawValue) ->
+                val key = rawKey.trim().lowercase().take(40)
+                val value = rawValue.trim().take(CharacterFieldPolicy.MAX_VALUE_LENGTH)
+                if (!CharacterFieldPolicy.isValidKey(key) || value.isBlank()) null else key to value
+            }
+            .take(CharacterFieldPolicy.MAX_FIELDS)
+            .toMap()
     }
 
     private fun normalizeParticipant(rawName: String, playerName: String): String {

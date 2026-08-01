@@ -108,6 +108,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.novelchat.data.model.CharacterCard
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.StoryState
 import com.novelchat.domain.engine.StateSyncPolicy
@@ -133,6 +135,8 @@ import com.novelchat.ui.viewmodel.ChatHistoryPositionPolicy
 import com.novelchat.ui.viewmodel.ChatMessageItem
 import com.novelchat.ui.viewmodel.ChatInputPolicy
 import com.novelchat.ui.viewmodel.ChatViewModel
+import com.novelchat.ui.viewmodel.CharacterFieldDisplay
+import com.novelchat.ui.viewmodel.CharacterFieldDisplayPolicy
 import com.novelchat.ui.viewmodel.NpcCardPolicy
 import com.novelchat.ui.viewmodel.PlayerCardPolicy
 import kotlinx.coroutines.launch
@@ -336,6 +340,7 @@ fun ChatScreen(
                     storyState = storyState,
                     player = state.playerState,
                     npcCards = state.npcCards,
+                    characterFields = state.worldSetting?.characterFields.orEmpty(),
                     isStateSyncing = state.isStreaming && !state.canCancelGeneration,
                     expanded = contextExpanded,
                     onToggleExpanded = {
@@ -493,6 +498,7 @@ fun ChatScreen(
         NpcDetailDialog(
             card = card,
             playerName = state.playerState?.name.orEmpty().ifBlank { "主角" },
+            characterFields = state.worldSetting?.characterFields.orEmpty(),
             onDismiss = { selectedNpcName = null }
         )
     }
@@ -501,6 +507,7 @@ fun ChatScreen(
             PlayerDetailDialog(
                 player = player,
                 pendingEvents = state.storyState?.pendingEvents.orEmpty(),
+                characterFields = state.worldSetting?.characterFields.orEmpty(),
                 onDismiss = { showPlayerDetail = false }
             )
         }
@@ -665,6 +672,7 @@ private fun StoryContextPanel(
     storyState: StoryState,
     player: PlayerState?,
     npcCards: List<CharacterCard>,
+    characterFields: List<CharacterFieldDefinition>,
     isStateSyncing: Boolean,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
@@ -770,7 +778,11 @@ private fun StoryContextPanel(
 
             player?.let { currentPlayer ->
                 HorizontalDivider(color = OutlineSoft)
-                CompactPlayerRow(player = currentPlayer, onClick = onPlayerClick)
+                CompactPlayerRow(
+                    player = currentPlayer,
+                    characterFields = characterFields,
+                    onClick = onPlayerClick
+                )
             }
 
             AnimatedVisibility(visible = expanded) {
@@ -785,6 +797,7 @@ private fun StoryContextPanel(
                         ActiveCharacterRow(
                             cards = npcCards,
                             playerName = player?.name.orEmpty().ifBlank { "主角" },
+                            characterFields = characterFields,
                             onNpcClick = onNpcClick
                         )
                     }
@@ -795,7 +808,11 @@ private fun StoryContextPanel(
 }
 
 @Composable
-private fun CompactPlayerRow(player: PlayerState, onClick: () -> Unit) {
+private fun CompactPlayerRow(
+    player: PlayerState,
+    characterFields: List<CharacterFieldDefinition>,
+    onClick: () -> Unit
+) {
     val name = player.name.ifBlank { "林克" }
     val role = player.class_.ifBlank { "城市居民" }
 
@@ -824,20 +841,37 @@ private fun CompactPlayerRow(player: PlayerState, onClick: () -> Unit) {
             )
             Text(role, color = DimText, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        DecisionSignal("体力", player.physicalState.stamina.coerceIn(0, 100).toString(), staminaColor(player.physicalState.stamina))
-        DecisionSignal("压力", player.mentalState.stress.ifBlank { "低" }, stressColor(player.mentalState.stress))
-        DecisionSignal("风险", player.cv.coerceIn(0, 100).toString(), riskColor(player.cv))
+        CharacterFieldDisplayPolicy.playerPrimary(player, characterFields).forEach { field ->
+            DecisionSignal(
+                field.definition.label,
+                compactFieldValue(field),
+                characterFieldColor(field)
+            )
+        }
     }
 }
 
 @Composable
 private fun DecisionSignal(label: String, value: String, color: Color) {
     Column(
-        modifier = Modifier.width(44.dp),
+        modifier = Modifier.width(56.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(label, color = DimText, fontSize = 9.sp, maxLines = 1)
-        Text(value, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(
+            label,
+            color = DimText,
+            fontSize = 9.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            value,
+            color = color,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -859,6 +893,7 @@ private fun GoalRow(goal: String) {
 private fun ActiveCharacterRow(
     cards: List<CharacterCard>,
     playerName: String,
+    characterFields: List<CharacterFieldDefinition>,
     onNpcClick: (CharacterCard) -> Unit
 ) {
     Column(modifier = Modifier.padding(bottom = 10.dp)) {
@@ -875,14 +910,24 @@ private fun ActiveCharacterRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             cards.forEach { card ->
-                NpcSceneCard(card, playerName, onClick = { onNpcClick(card) })
+                NpcSceneCard(
+                    card,
+                    playerName,
+                    characterFields,
+                    onClick = { onNpcClick(card) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun NpcSceneCard(card: CharacterCard, playerName: String, onClick: () -> Unit) {
+private fun NpcSceneCard(
+    card: CharacterCard,
+    playerName: String,
+    characterFields: List<CharacterFieldDefinition>,
+    onClick: () -> Unit
+) {
     val relationship = NpcCardPolicy.relationshipSnapshot(card, playerName)
 
     Card(
@@ -903,6 +948,26 @@ private fun NpcSceneCard(card: CharacterCard, playerName: String, onClick: () ->
                 Column(modifier = Modifier.weight(1f)) {
                     Text(card.name, color = BrightText, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(card.occupation.ifBlank { "身份未知" }, color = DimText, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            val primaryFields = CharacterFieldDisplayPolicy.npcPrimary(
+                card,
+                playerName,
+                characterFields
+            )
+            if (primaryFields.isNotEmpty()) {
+                HorizontalDivider(color = OutlineSoft)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    primaryFields.forEach { field ->
+                        DecisionSignal(
+                            field.definition.label,
+                            compactFieldValue(field),
+                            characterFieldColor(field)
+                        )
+                    }
                 }
             }
             HorizontalDivider(color = OutlineSoft)
@@ -1243,7 +1308,12 @@ private fun InputBar(
 }
 
 @Composable
-private fun PlayerDetailDialog(player: PlayerState, pendingEvents: List<String>, onDismiss: () -> Unit) {
+private fun PlayerDetailDialog(
+    player: PlayerState,
+    pendingEvents: List<String>,
+    characterFields: List<CharacterFieldDefinition>,
+    onDismiss: () -> Unit
+) {
     val goal = PlayerCardPolicy.currentGoal(player, pendingEvents)
 
     Dialog(onDismissRequest = onDismiss) {
@@ -1258,15 +1328,9 @@ private fun PlayerDetailDialog(player: PlayerState, pendingEvents: List<String>,
                     onDismiss = onDismiss
                 )
 
-                DetailSectionTitle("当前状态")
-                DetailRow("健康", player.physicalState.health, healthColor(player.physicalState.health))
-                DetailRow("体力", "${player.physicalState.stamina.coerceIn(0, 100)}/100", staminaColor(player.physicalState.stamina))
-                DetailRow("疲劳", player.physicalState.fatigue, fatigueColor(player.physicalState.fatigue))
-                DetailRow("饥饿", player.physicalState.hunger, DimText)
-                DetailRow("情绪", player.mentalState.mood.ifBlank { "平静" }, PrimaryPurple)
-                DetailRow("压力", player.mentalState.stress, stressColor(player.mentalState.stress))
-                DetailRow("当前风险", "${player.cv.coerceIn(0, 100)}/100", riskColor(player.cv))
-                player.mentalState.focus.takeIf { it.isNotBlank() }?.let { DetailTextBlock("当前关注", it) }
+                CharacterFieldSections(
+                    CharacterFieldDisplayPolicy.playerDetails(player, characterFields)
+                )
                 goal.takeIf { it.isNotBlank() }?.let { DetailTextBlock("当前目标", it) }
 
                 val activeQuests = player.questLog.filterNot { it.status.contains("完成") || it.status.contains("失败") }
@@ -1291,31 +1355,18 @@ private fun PlayerDetailDialog(player: PlayerState, pendingEvents: List<String>,
                     }
                 }
 
-                DetailSectionTitle("稳定能力")
-                DetailRow("魅力", "${player.charm}/100", PrimaryPink)
-                DetailRow("行动技巧", "${player.huntingSkill}/100", PrimaryPink)
-                DetailRow("社交等级", player.socialRank, PrimaryPurple)
-                DetailRow("意志", "${player.alpha}/100", PrimaryPurple)
-                DetailRow("体魄抗性", "${player.resistance}/100", NeonCyan)
-                DetailRow("运气", "${player.luck}/100", BarPositive)
-
-                player.personality.takeIf { it.isNotBlank() }?.let {
-                    DetailSectionTitle("性格")
-                    DetailTextBlock("人物特征", it)
-                }
-                player.background.takeIf { it.isNotBlank() }?.let {
-                    DetailSectionTitle("背景")
-                    DetailTextBlock("经历", it)
-                }
             }
         }
     }
 }
 
 @Composable
-private fun NpcDetailDialog(card: CharacterCard, playerName: String, onDismiss: () -> Unit) {
-    val relationship = NpcCardPolicy.relationshipSnapshot(card, playerName)
-
+private fun NpcDetailDialog(
+    card: CharacterCard,
+    playerName: String,
+    characterFields: List<CharacterFieldDefinition>,
+    onDismiss: () -> Unit
+) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(8.dp), color = PanelBg) {
             Column(
@@ -1328,29 +1379,9 @@ private fun NpcDetailDialog(card: CharacterCard, playerName: String, onDismiss: 
                     onDismiss = onDismiss
                 )
 
-                DetailSectionTitle("当前状态")
-                DetailRow("情绪", card.emotion.ifBlank { "平静" }, PrimaryPurple)
-                DetailRow("健康", card.physicalState.health, healthColor(card.physicalState.health))
-                DetailRow("体力", "${card.physicalState.stamina.coerceIn(0, 100)}/100", staminaColor(card.physicalState.stamina))
-                DetailRow("疲劳", card.physicalState.fatigue, fatigueColor(card.physicalState.fatigue))
-                DetailRow("压力", card.mentalState.stress, stressColor(card.mentalState.stress))
-                DetailRow("与${playerName}的关系", relationship.stage, NeonCyan)
-                DetailRow("好感", formatFavor(relationship.favor), favorColor(relationship.favor))
-                DetailRow(
-                    "信任",
-                    NpcCardPolicy.trustLabel(relationship.trust),
-                    trustColor(relationship.trust)
+                CharacterFieldSections(
+                    CharacterFieldDisplayPolicy.npcDetails(card, playerName, characterFields)
                 )
-                card.mentalState.focus.takeIf { it.isNotBlank() }?.let { DetailTextBlock("当前关注", it) }
-
-                if (card.age > 0 || card.gender.isNotBlank()) {
-                    DetailSectionTitle("人物资料")
-                    if (card.age > 0) DetailRow("年龄", card.age.toString(), BrightText)
-                    if (card.gender.isNotBlank()) DetailRow("性别", card.gender, BrightText)
-                }
-                card.personality.takeIf { it.isNotBlank() }?.let { DetailTextBlock("性格", it) }
-                card.appearance.takeIf { it.isNotBlank() }?.let { DetailTextBlock("外貌", it) }
-                card.background.takeIf { it.isNotBlank() }?.let { DetailTextBlock("背景", it) }
 
                 if (card.inventory.isNotEmpty()) {
                     DetailSectionTitle("持有物品")
@@ -1380,6 +1411,67 @@ private fun DetailDialogHeader(title: String, subtitle: String, onDismiss: () ->
         IconButton(onClick = onDismiss) {
             Icon(Icons.Default.Close, "关闭", tint = DimText)
         }
+    }
+}
+
+@Composable
+private fun CharacterFieldSections(fields: List<CharacterFieldDisplay>) {
+    val groupOrder = listOf(
+        CharacterFieldDefinition.GROUP_STATUS,
+        CharacterFieldDefinition.GROUP_RELATIONSHIP,
+        CharacterFieldDefinition.GROUP_ABILITY,
+        CharacterFieldDefinition.GROUP_PROFILE,
+        CharacterFieldDefinition.GROUP_IDENTITY
+    )
+    val grouped = fields.groupBy { it.definition.group }
+    groupOrder.forEach { group ->
+        val groupFields = grouped[group].orEmpty()
+        if (groupFields.isEmpty()) return@forEach
+        DetailSectionTitle(characterFieldGroupTitle(group))
+        groupFields.forEach { field ->
+            if (
+                field.definition.valueType in setOf(
+                    CharacterFieldDefinition.TYPE_TEXT,
+                    CharacterFieldDefinition.TYPE_LIST
+                ) && field.rawValue.length > 48
+            ) {
+                DetailTextBlock(field.definition.label, field.rawValue)
+            } else {
+                DetailRow(field.definition.label, field.value, characterFieldColor(field))
+            }
+        }
+    }
+}
+
+private fun characterFieldGroupTitle(group: String): String = when (group) {
+    CharacterFieldDefinition.GROUP_IDENTITY -> "基本信息"
+    CharacterFieldDefinition.GROUP_PROFILE -> "人物档案"
+    CharacterFieldDefinition.GROUP_ABILITY -> "能力与成长"
+    CharacterFieldDefinition.GROUP_RELATIONSHIP -> "关系"
+    else -> "当前状态"
+}
+
+private fun compactFieldValue(field: CharacterFieldDisplay): String {
+    return CharacterFieldPolicy.formatValue(field.definition, field.rawValue, compact = true)
+}
+
+private fun characterFieldColor(field: CharacterFieldDisplay): Color {
+    if (field.definition.valueType != CharacterFieldDefinition.TYPE_NUMBER) {
+        return when (field.definition.group) {
+            CharacterFieldDefinition.GROUP_RELATIONSHIP -> NeonCyan
+            CharacterFieldDefinition.GROUP_STATUS -> PrimaryPurple
+            CharacterFieldDefinition.GROUP_ABILITY -> BarPositive
+            else -> BrightText
+        }
+    }
+    val value = field.rawValue.toDoubleOrNull() ?: return BrightText
+    val range = (field.definition.maxValue - field.definition.minValue).toDouble()
+    if (range <= 0.0) return BrightText
+    val ratio = ((value - field.definition.minValue) / range).coerceIn(0.0, 1.0)
+    return when {
+        ratio <= 0.2 -> CvRed
+        ratio <= 0.45 -> CvYellow
+        else -> NeonCyan
     }
 }
 

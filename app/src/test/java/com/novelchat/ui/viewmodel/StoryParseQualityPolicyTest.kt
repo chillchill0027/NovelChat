@@ -1,5 +1,6 @@
 package com.novelchat.ui.viewmodel
 
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.data.remote.model.ParsedNpc
 import com.novelchat.data.remote.model.ParsedPlayer
 import com.novelchat.data.remote.model.ParsedWorldSetting
@@ -41,6 +42,18 @@ class StoryParseQualityPolicyTest {
     }
 
     @Test
+    fun qualityIssue_requestsRepairWhenAiOmitsCharacterFieldContract() {
+        val result = usableResult(
+            player = ParsedPlayer(name = "林克", class_ = "记者"),
+            npcs = listOf(ParsedNpc(name = "王常", occupation = "邻居"))
+        ).copy(
+            worldSetting = ParsedWorldSetting(name = "海临市", description = "当代城市生活。")
+        )
+
+        assertTrue(StoryParseQualityPolicy.qualityIssue(result).orEmpty().contains("character_fields"))
+    }
+
+    @Test
     fun qualityIssue_rejectsDuplicatePlayerAndNpcNames() {
         val playerCollision = StoryParseQualityPolicy.qualityIssue(
             usableResult(
@@ -72,7 +85,13 @@ class StoryParseQualityPolicyTest {
         player: ParsedPlayer,
         npcs: List<ParsedNpc>
     ) = StoryParseResult(
-        worldSetting = ParsedWorldSetting(name = "海临市", description = "当代城市生活。"),
+        worldSetting = ParsedWorldSetting(
+            name = "海临市",
+            description = "当代城市生活。",
+            characterFields = listOf(
+                CharacterFieldDefinition(key = "stamina", label = "体力")
+            )
+        ),
         player = player,
         npcs = npcs,
         worldbook = listOf(

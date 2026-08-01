@@ -20,6 +20,7 @@ class CharacterStatePatchContentPolicyTest {
                     injuries = List(30) { "伤".repeat(1_500) }
                 ),
                 mentalState = MentalStatePatch(currentThoughts = "想".repeat(3_000)),
+                attributes = mapOf(" Personality " to "更谨慎", "bad-key!" to "丢弃"),
                 relationshipToPlayer = RelationshipPatch(
                     favorDelta = 500,
                     trustDelta = -500,
@@ -35,6 +36,7 @@ class CharacterStatePatchContentPolicyTest {
         assertEquals(20, normalized.physicalState?.injuries?.size)
         assertEquals(1_000, normalized.physicalState?.injuries?.first()?.length)
         assertEquals(2_000, normalized.mentalState?.currentThoughts?.length)
+        assertEquals(mapOf("personality" to "更谨慎"), normalized.attributes)
         assertEquals(100, normalized.relationshipToPlayer?.favorDelta)
         assertEquals(-100, normalized.relationshipToPlayer?.trustDelta)
         assertEquals(50, normalized.inventoryChanges.size)

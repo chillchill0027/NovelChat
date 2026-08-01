@@ -57,7 +57,62 @@
         "货币": "人民币",
         "叙事尺度": "以街区、工作场所和家庭关系为主"
       }
-    }
+    },
+    "character_fields": [
+      {
+        "key": "stamina",
+        "label": "精力",
+        "description": "继续工作、通勤和处理事务的可用精力",
+        "group": "status",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 120,
+        "default_value": "100",
+        "unit": "点",
+        "applies_to": "all",
+        "display": "primary",
+        "primary_for": "player",
+        "update_mode": "dynamic",
+        "order": 30
+      },
+      {
+        "key": "personality",
+        "label": "性格与行为特征",
+        "description": "只在反复行为或重大选择形成稳定倾向后刷新",
+        "group": "profile",
+        "value_type": "text",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 11
+      },
+      {
+        "key": "background",
+        "label": "重要经历",
+        "description": "已经发生并会持续影响后续判断的重要经历",
+        "group": "profile",
+        "value_type": "text",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 12
+      },
+      {
+        "key": "life_stability",
+        "label": "生活稳定度",
+        "description": "由住处、工作、财务和关系的长期稳定情况共同决定",
+        "group": "ability",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 100,
+        "default_value": "35",
+        "unit": "%",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 28
+      }
+    ]
   },
   "player": {
     "name": "林克",
@@ -73,6 +128,16 @@
       "沟通协商",
       "基础财务常识"
     ],
+    "level": 3,
+    "charm": 46,
+    "action_skill": 41,
+    "social_rank": "普通职员",
+    "luck": 52,
+    "willpower": 58,
+    "resilience": 49,
+    "custom_attributes": {
+      "life_stability": "35"
+    },
     "lore": {
       "aliases": [
         "阿克"
@@ -169,6 +234,9 @@
       "background": "顾宁在南湾一家设计事务所工作，近期项目进入高压交付阶段。",
       "appearance": "齐肩黑发，常穿便于通勤的浅色风衣。",
       "relationship_to_player": "交往三年的女友",
+      "custom_attributes": {
+        "life_stability": "44"
+      },
       "lore": {
         "aliases": [
           "宁宁"

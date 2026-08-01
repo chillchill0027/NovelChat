@@ -5,9 +5,12 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSyntaxException
 import com.novelchat.data.model.CharacterLore
 import com.novelchat.data.model.CharacterStatePatch
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.InventoryItem
 import com.novelchat.data.model.MentalState
 import com.novelchat.data.model.NarrativeResult
@@ -122,8 +125,9 @@ class JsonResponseParser {
             removeExplicitNulls(payload)
             normalizeArray(payload, "inventory_changes")
             payload.get("physical_state")?.takeIf { it.isJsonObject }?.asJsonObject?.let {
-                normalizeInt(it, "stamina", 0, 100)
+                normalizeInt(it, "stamina", 0, CharacterFieldPolicy.MAX_NUMERIC_VALUE)
             }
+            normalizeStringMapField(payload, "attributes")
             payload.get("relationship_to_player")?.takeIf { it.isJsonObject }?.asJsonObject?.let {
                 normalizeInt(it, "favor_delta", -100, 100)
                 normalizeInt(it, "trust_delta", -100, 100)
@@ -158,11 +162,12 @@ class JsonResponseParser {
             throw IllegalArgumentException("JSON 根节点必须是对象")
         }
         val root = parsed.asJsonObject
+        val worldSetting = parseWorldSetting(root.obj("world_setting"))
         return StoryParseResult(
-            worldSetting = parseWorldSetting(root.obj("world_setting")),
-            player = parsePlayer(root.obj("player")),
+            worldSetting = worldSetting,
+            player = parsePlayer(root.obj("player"), worldSetting.characterFields),
             npcs = root.array("npcs").mapNotNull { element ->
-                element.asObjectOrNull()?.let { parseNpc(it) }
+                element.asObjectOrNull()?.let { parseNpc(it, worldSetting.characterFields) }
             },
             worldbook = root.array("worldbook").mapNotNull { element ->
                 element.asObjectOrNull()?.let { parseWorldbookItem(it) }
@@ -403,6 +408,7 @@ class JsonResponseParser {
                 "name", "gender", "race", "occupation", "personality", "background",
                 "appearance", "relationship_to_player", "first_appearance"
             ).forEach { normalizeText(character, it) }
+            normalizeStringMapField(character, "attributes")
             // The task prompt explicitly forbids this large nested object. Dropping it also
             // prevents a single malformed optional card from invalidating the whole sync.
             character.remove("initial_status")
@@ -430,9 +436,9 @@ class JsonResponseParser {
     }
 
     private fun normalizePlayerChanges(changes: JsonObject) {
-        normalizeInt(changes, "risk", 0, 100)
+        normalizeInt(changes, "risk", 0, CharacterFieldPolicy.MAX_NUMERIC_VALUE)
         objectField(changes, "physical_state")?.let { physical ->
-            normalizeInt(physical, "stamina", 0, 100)
+            normalizeInt(physical, "stamina", 0, CharacterFieldPolicy.MAX_NUMERIC_VALUE)
             listOf("health", "fatigue", "hunger", "pain").forEach { normalizeText(physical, it) }
             normalizeStringList(physical, "injuries", "description")
         }
@@ -458,13 +464,14 @@ class JsonResponseParser {
                     .forEach { normalizeText(quest, it) }
             }
         }
+        normalizeStringMapField(changes, "attributes")
         normalizeRelationships(changes)
     }
 
     private fun moveFlatPlayerChanges(playerUpdate: JsonObject): JsonObject? {
         val flatFields = listOf(
             "physical_state", "mental_state", "risk", "inventory", "relationships",
-            "quest_log", "story_progress"
+            "quest_log", "story_progress", "attributes"
         )
         val present = flatFields.filter(playerUpdate::has)
         if (present.isEmpty()) return null
@@ -501,6 +508,23 @@ class JsonResponseParser {
         } else {
             root.remove(field)
         }
+    }
+
+    private fun normalizeStringMapField(root: JsonObject, field: String) {
+        val value = root.get(field) ?: return
+        if (!value.isJsonObject) {
+            root.remove(field)
+            return
+        }
+        val normalized = JsonObject()
+        value.asJsonObject.entrySet().forEach { (rawKey, rawValue) ->
+            val key = rawKey.trim().take(40)
+            val text = rawValue.toPlainString().take(CharacterFieldPolicy.MAX_VALUE_LENGTH)
+            if (key.isNotBlank() && text.isNotBlank()) {
+                normalized.add(key, JsonPrimitive(text))
+            }
+        }
+        root.add(field, normalized)
     }
 
     private fun normalizeStringList(root: JsonObject, field: String, objectField: String? = null) {
@@ -637,6 +661,8 @@ class JsonResponseParser {
             "mentalState" to "mental_state",
             "questLog" to "quest_log",
             "storyProgress" to "story_progress",
+            "actionSkill" to "action_skill",
+            "socialRank" to "social_rank",
             "currentArc" to "current_arc",
             "currentChapter" to "current_chapter",
             "currentScene" to "current_scene",
@@ -672,7 +698,16 @@ class JsonResponseParser {
             "relatedEvents" to "related_events",
             "relatedLocations" to "related_locations",
             "isSecret" to "is_secret",
-            "knownByPlayer" to "known_by_player"
+            "knownByPlayer" to "known_by_player",
+            "characterFields" to "character_fields",
+            "customAttributes" to "custom_attributes",
+            "valueType" to "value_type",
+            "minValue" to "min_value",
+            "maxValue" to "max_value",
+            "defaultValue" to "default_value",
+            "appliesTo" to "applies_to",
+            "primaryFor" to "primary_for",
+            "updateMode" to "update_mode"
         )
     }
 
@@ -685,11 +720,15 @@ class JsonResponseParser {
             tone = obj.string("tone"),
             forbidden = obj.stringList("forbidden"),
             description = obj.string("description"),
-            lore = parseWorldLore(obj.obj("lore"))
+            lore = parseWorldLore(obj.obj("lore")),
+            characterFields = parseCharacterFields(obj.array("character_fields"))
         )
     }
 
-    private fun parsePlayer(obj: JsonObject): ParsedPlayer {
+    private fun parsePlayer(
+        obj: JsonObject,
+        characterFields: List<CharacterFieldDefinition>
+    ): ParsedPlayer {
         return ParsedPlayer(
             name = obj.string("name"),
             age = obj.int("age", 20),
@@ -700,14 +739,45 @@ class JsonResponseParser {
             background = obj.string("background"),
             appearance = obj.string("appearance"),
             skills = obj.stringList("skills"),
+            level = fieldInt(characterFields, "level", obj.int("level", 1), 1),
+            charm = fieldInt(characterFields, "charm", obj.int("charm", 25), 25),
+            actionSkill = fieldInt(
+                characterFields,
+                "action_skill",
+                obj.int("action_skill", 10),
+                10
+            ),
+            socialRank = fieldValue(
+                characterFields,
+                "social_rank",
+                obj.string("social_rank"),
+                "E"
+            ),
+            luck = fieldInt(characterFields, "luck", obj.int("luck", 50), 50),
+            willpower = fieldInt(
+                characterFields,
+                "willpower",
+                obj.int("willpower", 15),
+                15
+            ),
+            resilience = fieldInt(
+                characterFields,
+                "resilience",
+                obj.int("resilience", 20),
+                20
+            ),
             lore = parseCharacterLore(obj.obj("lore")),
-            physicalState = parsePhysicalState(obj.obj("physical_state")),
-            mentalState = parseMentalState(obj.obj("mental_state")),
+            physicalState = parsePhysicalState(obj.obj("physical_state"), characterFields),
+            mentalState = parseMentalState(obj.obj("mental_state"), characterFields),
+            customAttributes = obj.stringMap("custom_attributes"),
             inventory = parseInventory(obj.array("inventory"))
         )
     }
 
-    private fun parseNpc(obj: JsonObject): ParsedNpc {
+    private fun parseNpc(
+        obj: JsonObject,
+        characterFields: List<CharacterFieldDefinition>
+    ): ParsedNpc {
         return ParsedNpc(
             name = obj.string("name"),
             age = obj.int("age", 0),
@@ -719,8 +789,9 @@ class JsonResponseParser {
             appearance = obj.string("appearance"),
             relationshipToPlayer = obj.string("relationship_to_player"),
             lore = parseCharacterLore(obj.obj("lore")),
-            physicalState = parsePhysicalState(obj.obj("physical_state")),
-            mentalState = parseMentalState(obj.obj("mental_state")),
+            physicalState = parsePhysicalState(obj.obj("physical_state"), characterFields),
+            mentalState = parseMentalState(obj.obj("mental_state"), characterFields),
+            customAttributes = obj.stringMap("custom_attributes"),
             inventory = parseInventory(obj.array("inventory"))
         )
     }
@@ -805,24 +876,84 @@ class JsonResponseParser {
         )
     }
 
-    private fun parsePhysicalState(obj: JsonObject): PhysicalState {
+    private fun parsePhysicalState(
+        obj: JsonObject,
+        characterFields: List<CharacterFieldDefinition>
+    ): PhysicalState {
+        val staminaField = CharacterFieldPolicy.definitionFor(characterFields, "stamina")
+            ?: CharacterFieldPolicy.defaultDefinitions.first { it.key == "stamina" }
+        val staminaDefault = staminaField.defaultValue.toIntOrNull() ?: staminaField.maxValue
         return PhysicalState(
-            stamina = obj.int("stamina", 100).coerceIn(0, 100),
-            health = obj.string("health").ifBlank { "良好" },
+            stamina = obj.int("stamina", staminaDefault)
+                .coerceIn(staminaField.minValue, staminaField.maxValue),
+            health = fieldValue(characterFields, "health", obj.string("health"), "良好"),
             injuries = obj.stringList("injuries"),
-            fatigue = obj.string("fatigue").ifBlank { "无" },
-            hunger = obj.string("hunger").ifBlank { "不饿" },
-            pain = obj.string("pain").ifBlank { "无" }
+            fatigue = fieldValue(characterFields, "fatigue", obj.string("fatigue"), "无"),
+            hunger = fieldValue(characterFields, "hunger", obj.string("hunger"), "不饿"),
+            pain = fieldValue(characterFields, "pain", obj.string("pain"), "无")
         )
     }
 
-    private fun parseMentalState(obj: JsonObject): MentalState {
+    private fun parseMentalState(
+        obj: JsonObject,
+        characterFields: List<CharacterFieldDefinition>
+    ): MentalState {
         return MentalState(
-            mood = obj.string("mood"),
-            stress = obj.string("stress").ifBlank { "低" },
-            focus = obj.string("focus"),
-            currentThoughts = obj.string("current_thoughts")
+            mood = fieldValue(characterFields, "mood", obj.string("mood"), ""),
+            stress = fieldValue(characterFields, "stress", obj.string("stress"), "低"),
+            focus = fieldValue(characterFields, "focus", obj.string("focus"), ""),
+            currentThoughts = fieldValue(
+                characterFields,
+                "current_thoughts",
+                obj.string("current_thoughts"),
+                ""
+            )
         )
+    }
+
+    private fun parseCharacterFields(elements: List<JsonElement>): List<CharacterFieldDefinition> {
+        return elements.mapNotNull { element ->
+            val obj = element.asObjectOrNull() ?: return@mapNotNull null
+            CharacterFieldDefinition(
+                key = obj.string("key"),
+                label = obj.string("label"),
+                description = obj.string("description"),
+                group = obj.string("group").ifBlank { CharacterFieldDefinition.GROUP_STATUS },
+                valueType = obj.string("value_type").ifBlank { CharacterFieldDefinition.TYPE_TEXT },
+                minValue = obj.int("min_value", 0),
+                maxValue = obj.int("max_value", 100),
+                options = obj.stringList("options"),
+                defaultValue = obj.string("default_value"),
+                unit = obj.string("unit"),
+                appliesTo = obj.string("applies_to").ifBlank { CharacterFieldDefinition.TARGET_ALL },
+                display = obj.string("display").ifBlank { CharacterFieldDefinition.DISPLAY_DETAIL },
+                primaryFor = obj.string("primary_for").ifBlank { CharacterFieldDefinition.TARGET_ALL },
+                updateMode = obj.string("update_mode").ifBlank { CharacterFieldDefinition.UPDATE_EVENT },
+                order = obj.int("order", 100)
+            )
+        }
+    }
+
+    private fun fieldValue(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        raw: String,
+        fallback: String
+    ): String {
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key)
+            ?: return raw.trim().ifBlank { fallback }
+        return CharacterFieldPolicy.sanitizeValue(field, raw.ifBlank { field.defaultValue })
+            ?: fallback
+    }
+
+    private fun fieldInt(
+        characterFields: List<CharacterFieldDefinition>,
+        key: String,
+        raw: Int,
+        fallback: Int
+    ): Int {
+        val field = CharacterFieldPolicy.definitionFor(characterFields, key) ?: return raw
+        return CharacterFieldPolicy.sanitizeValue(field, raw.toString())?.toIntOrNull() ?: fallback
     }
 
     private fun parseInventory(elements: List<JsonElement>): List<InventoryItem> {
@@ -910,6 +1041,13 @@ class JsonResponseParser {
         return when {
             isJsonNull -> ""
             isJsonPrimitive -> asJsonPrimitive.asString.trim()
+            isJsonArray -> asJsonArray.mapNotNull { item ->
+                when {
+                    item.isJsonNull -> null
+                    item.isJsonPrimitive -> item.asJsonPrimitive.asString.trim().takeIf(String::isNotBlank)
+                    else -> item.toString()
+                }
+            }.joinToString("、")
             else -> toString()
         }
     }

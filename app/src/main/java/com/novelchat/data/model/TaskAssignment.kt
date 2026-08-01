@@ -27,6 +27,7 @@ data class PlayerChanges(
     @SerializedName("story_progress") val storyProgress: StoryProgressPatch? = null,
     @SerializedName("physical_state") val physicalState: PhysicalStatePatch? = null,
     @SerializedName("mental_state") val mentalState: MentalStatePatch? = null,
+    @SerializedName("attributes") val attributes: Map<String, String> = emptyMap(),
     @SerializedName("risk") val risk: Int? = null
 )
 
@@ -48,6 +49,7 @@ data class StoryStateUpdate(
     @SerializedName("time_of_day") val timeOfDay: String? = null,
     @SerializedName("weather") val weather: String? = null,
     @SerializedName("mood") val mood: String? = null,
+    @SerializedName("scene_description") val sceneDescription: String? = null,
     @SerializedName("active_characters") val activeCharacters: List<String>? = null,
     @SerializedName("pending_events") val pendingEvents: List<String>? = null
 )
@@ -72,6 +74,7 @@ data class CharacterStatePatch(
     @SerializedName("emotion") val emotion: String? = null,
     @SerializedName("physical_state") val physicalState: PhysicalStatePatch? = null,
     @SerializedName("mental_state") val mentalState: MentalStatePatch? = null,
+    @SerializedName("attributes") val attributes: Map<String, String> = emptyMap(),
     @SerializedName("relationship_to_player") val relationshipToPlayer: RelationshipPatch? = null,
     @SerializedName("inventory_changes") val inventoryChanges: List<InventoryChange> = emptyList()
 )
@@ -99,6 +102,7 @@ data class NewCharacter(
     @SerializedName("appearance") val appearance: String = "",
     @SerializedName("relationship_to_player") val relationshipToPlayer: String = "",
     @SerializedName("first_appearance") val firstAppearance: String = "",
+    @SerializedName("attributes") val attributes: Map<String, String> = emptyMap(),
     @SerializedName("initial_status") val initialStatus: CharacterCard? = null
 )
 

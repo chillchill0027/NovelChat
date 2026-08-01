@@ -38,6 +38,7 @@ class RpgPromptBuilder {
         sb.appendLine()
         sb.appendLine("【硬性规则】")
         sb.appendLine("- 主角始终使用主角状态中的真实姓名；身份或职业不能代替姓名。")
+        sb.appendLine("- 用户只用身份或关系词指代人物时，先与已知角色的姓名、身份和关系做唯一匹配；不得凭空升级亲密关系。英文 partner 若没有恋爱或婚姻语境，按搭档/同伴理解，不能擅自生成恋人。")
         sb.appendLine("- 新登场且与主角发生实质互动的人物必须有自然的真实姓名，禁止“邻居A、路人甲、店员A、陌生人、中年男人、那人”等占位称呼；纯背景中没有对白、递接、拦截或碰撞的人群不必建档。")
         sb.appendLine("- 严格遵守世界设定、既有事实、人物关系与时间线，不擅自取消或改写用户已经明确的行动结果。")
         sb.appendLine("- 角色 lore.secrets、世界书 is_secret=true 或 known_by_player=false 的内容属于作者侧事实：可用于保持因果一致，但在角色通过可信途径发现前，禁止让正文、对白或主角内心直接泄露。")
@@ -205,6 +206,10 @@ class RpgPromptBuilder {
         sb.appendLine("- 所有列表中的每一项都必须是符合下述字段约定的 JSON 对象，绝不能把事件或人物变化写成纯字符串。")
         sb.appendLine("- 不要猜测未发生的变化，不要给所有在场角色例行刷新；character_updates 只列出本轮实际互动或状态明确改变的人物。")
         sb.appendLine("- 主角的身体、心理、风险、任务和关系发生变化时写入 player_update；数值要依据正文，变化幅度克制。")
+        sb.appendLine("- 【世界整体设定.character_fields】是本故事角色卡的字段合同。player_update.changes.attributes 使用 key:value 更新主角字段；dynamic 字段在本轮有明确变化时更新，event 字段只有形成长期改变时更新，manual 字段禁止自动更新。")
+        sb.appendLine("- 【强制动态字段核对】逐项阅读每个 dynamic 字段的 label、description 与世界 rules。正文一旦发生其描述的消耗、恢复、累积、缓解、暴露或受损条件，就必须写入对应最终值；不能因为主角行动成功、变化幅度较小或字段名称是故事自定义词而省略。")
+        sb.appendLine("- 例如字段定义说明“施法消耗魔力”，正文实际完成施法时必须降低该字段；安全休息或引潮已完成时才可恢复。世界规则中的必然代价优先于模型自行判断。所有 number/choice/text 更新均写本轮结束后的最终值，不写增减量。")
+        sb.appendLine("- 人物特征、经历、外貌、技能、魅力、行动技巧、社交等级、意志、体魄抗性、运气以及故事自定义字段都不是永久冻结项。正文若产生可持续的新事实，必须把对应 key 写入 attributes；不要因普通寒暄重写长期档案。")
         sb.appendLine("- 当首要待办的内容、阶段或完成状态改变时，同步更新 player_update.changes.story_progress.current_goal，使它与 pending_events 的第一项保持一致；不要留下已经完成的旧目标。")
         sb.appendLine("- 正文出现赶工或冲突、明确的截止承诺、休息或进食、受伤或恢复、获得或失去物品时，player_update 不得为 null；用 mental_state、physical_state 或 story_progress.current_goal 记录有判断价值的变化。")
         sb.appendLine("- 地点、时间、天气、氛围、在场人物或待处理事件改变时写入 story_update。")
@@ -212,7 +217,7 @@ class RpgPromptBuilder {
         sb.appendLine("- pending_events 每一项都必须是可独立理解的具体行动，包含对象或结果；禁止把“尚未执行、尚未安排时间、时间”等模板说明拆成待办。已经获得引导、已经抵达等完成的阶段不得保留为待办。")
         sb.appendLine("- 只有正文明确完成整个事项时才能从 pending_events 删除。开始处理、形成初稿、取得部分回复或约定未来时间都只是进展，必须保留核心待办并按最新事实改写描述。")
         sb.appendLine("- 回复面试/会议邀请只完成“回复邀请”，不等于未来的面试/会议已经完成；应把待办更新为具体赴约时间，而不是删除。")
-        sb.appendLine("- new_characters 只包含首次出现且不在已知角色中的人物，name 必须是真实姓名，身份写入 occupation；occupation 必须是正文已知的单一具体身份，禁止“学生或职员、可能是店员、未知”等猜测，职业不明时写与主角的确定关系（如“林克的女友”）；不要输出 initial_status。")
+        sb.appendLine("- new_characters 只包含首次出现且不在已知角色中的人物，name 必须是真实姓名，身份写入 occupation；occupation 必须是正文已知的单一具体身份，禁止“学生或职员、可能是店员、未知”等猜测，职业不明时写与主角的确定关系（如“林克的女友”）；attributes 填写可由正文确认的角色字段初值，不要输出 initial_status。")
         sb.appendLine("- 【本轮首次登场人物锚点】中的每个人，只要不在【已知角色状态】中，就必须逐人写入 new_characters；禁止遗漏用户新确认的伴侣/亲属，也禁止用“老板、店员、女朋友”等身份泛称代替 name。")
         sb.appendLine("- story_update.active_characters 中的每个名字必须逐字等于【已知角色状态】或 new_characters 中的一个真实姓名，不能引用不存在的角色卡。")
         sb.appendLine("- 人物只是暂时离开当前场景时，只修改 story_update.active_characters；retired_characters 仅用于明确永久离开故事或确定死亡的人物。")
@@ -285,11 +290,13 @@ class RpgPromptBuilder {
         }
 
         sb.appendLine("【字段约定】")
-        sb.appendLine("- story_update 可包含 current_location、time_of_day、weather、mood、active_characters、pending_events。")
-        sb.appendLine("- player_update.changes 可包含 physical_state、mental_state、risk、inventory、relationships、quest_log、story_progress；只写改变项。")
-        sb.appendLine("- risk 必须是 0-100 的整数；风险原因写入 player_update.reason，绝不能把说明文字填进 risk。")
+        sb.appendLine("- story_update 可包含 current_location、time_of_day、weather、mood、scene_description、active_characters、pending_events；scene_description 用一句已发生的结尾场景事实概括当前画面。")
+        sb.appendLine("- player_update.changes 可包含 physical_state、mental_state、attributes、risk、inventory、relationships、quest_log、story_progress；只写改变项。attributes 的 key 必须来自 character_fields。")
+        val riskField = CharacterFieldPolicy.definitionFor(worldSetting.characterFields, "risk")
+        val riskRange = riskField?.let { "${it.minValue}-${it.maxValue}" } ?: "0-100"
+        sb.appendLine("- risk 必须是 $riskRange 的整数并遵守 character_fields 中 risk 的语义；风险原因写入 player_update.reason，绝不能把说明文字填进 risk。")
         sb.appendLine("- character_updates 项格式为 {\"name\":\"真实姓名\",\"reason\":\"本轮发生的明确变化\"}；name 必须逐字复制【已知角色状态】中的角色名，禁止省略身份前缀或自造别名。")
-        sb.appendLine("- new_characters 项至少包含 name、occupation、personality、background、appearance、relationship_to_player、first_appearance。")
+        sb.appendLine("- new_characters 项至少包含 name、occupation、personality、background、appearance、relationship_to_player、first_appearance、attributes；attributes 没有可确认值时写 {}。")
         sb.appendLine("- retired_characters 项格式为 {\"name\":\"已知角色真实姓名\",\"reason\":\"永久退场原因\"}；临时离场不得写入。")
         sb.appendLine("- worldbook_updates 项格式为 {\"action\":\"create|update|delete\",\"id\":\"已有条目ID或新建稳定ID\",\"name\":\"条目名称\",\"type\":\"location|item|organization|event|character\",\"description\":\"已确认事实\",\"keywords\":[\"关键词\"]}；update/delete 必须使用【相关世界资料】中可定位的 id 或 name。")
         sb.appendLine("- item_transfers 项格式为 {\"item\":\"物品名\",\"quantity\":1,\"from\":\"已知角色真实姓名\",\"to\":\"已知角色真实姓名\",\"reason\":\"正文中的转移原因\"}；双方都必须能在主角或已知角色中找到。")
@@ -302,6 +309,7 @@ class RpgPromptBuilder {
     }
 
     fun buildEssentialStateSyncPrompt(
+        worldSetting: WorldSetting = WorldSetting(),
         playerState: PlayerState?,
         storyState: StoryState,
         activeCharacters: List<CharacterCard>,
@@ -318,14 +326,17 @@ class RpgPromptBuilder {
             appendLine("根据正文末尾的事实更新 story_update 与 player_update；首次登场人物写入 new_characters，实际互动或明确变化的已知人物写入 character_updates。其余列表保持 []。")
             appendLine("story_update.pending_events 必须是截至正文末尾的完整未完成事项，已完成事项删除，部分完成事项按最新阶段保留。")
             appendLine("pending_events 每一项必须是可独立执行的完整短句，写清动作与对象；禁止输出“尚未执行、尚未安排时间、时间”等无对象的模板碎片，也不要把已经抵达或已经获得引导写成待办。")
-            appendLine("story_update.active_characters 只写真正在当前场景的人物真实姓名；身份不能代替姓名。")
+            appendLine("story_update.active_characters 只写真正在当前场景的人物真实姓名；身份不能代替姓名。scene_description 用一句已发生的结尾场景事实概括当前画面。")
             appendLine("【本轮首次登场人物锚点】中不在已知角色里的每个人都必须写入 new_characters；active_characters 的每个名字必须能在已知角色或 new_characters 中找到。")
-            appendLine("player_update.changes 只写改变项，可含 physical_state、mental_state、risk、inventory、relationships、quest_log、story_progress；risk 只能是 0-100 整数。")
+            appendLine("player_update.changes 只写改变项，可含 physical_state、mental_state、attributes、risk、inventory、relationships、quest_log、story_progress；attributes 的 key 必须来自 character_fields；risk 只能是数值。")
+            appendLine("逐项检查 character_fields 中 update_mode=dynamic 的字段。正文触发字段 description 或世界 rules 写明的消耗、恢复、累积、缓解、暴露或受损条件时，必须写入本轮结束后的最终值；例如施法消耗魔力时不可省略魔力字段。")
             appendLine("new_characters 的 name 必须是真实姓名，并包含 occupation、personality、background、appearance、relationship_to_player、first_appearance。")
             StateSyncPolicy.pendingFromRound(storyState)?.let { pendingFrom ->
                 appendLine("第${pendingFrom}轮起有状态待补同步。综合【待补同步剧情】和【本轮正文】，给出截至本轮末尾的最终状态；不要重复累计已经体现在当前状态中的变化。")
             }
             appendLine()
+            appendLine("【世界与角色字段合同】")
+            appendLine(gson.toJson(LorePromptSnapshotPolicy.world(worldSetting)))
             appendLine("【当前场景状态】")
             appendLine(gson.toJson(storyState))
             playerState?.let {
@@ -484,6 +495,33 @@ class RpgPromptBuilder {
         }
     }
 
+    fun buildNarrativeLengthExpansionPrompt(
+        rawResponse: String,
+        issue: String
+    ): String {
+        return buildString {
+            appendLine("【任务】")
+            appendLine("你是中文小说扩写编辑。下方 JSON 的剧情方向与事实正确，但 narrative 明显不足 1000 个中文字符。请把正文扩写到 1100-1300 个中文字符，不能原样返回。")
+            appendLine("检测结果：$issue。")
+            appendLine()
+            appendLine("【扩写规则】")
+            appendLine("- 保留原有全部动作、对白、姓名、物品、地点、结果、因果顺序和结尾状态，不删除或压缩原文中的有效内容。")
+            appendLine("- 在现有事件内部补足可感知的施行动作、环境反馈、NPC即时反应、信息核对和自然衔接；主动续写只能延展原文已启动的直接后果。")
+            appendLine("- 不新增主角的重大决定、承诺、签字、付款、关系选择或原文没有发生的结果；不要用回忆、空泛心理、重复动作和景物堆砌凑字数。")
+            appendLine("- 使用第三人称限知视角与自然现代中文，保持 4-6 段。每段都必须带来动作、对白、物件变化、现场反馈或新信息。")
+            appendLine("- 所有引号内对白及说话者原样保留；可以在对白前后补足对方可观察的动作与反应。")
+            appendLine("- 写完后先计算 narrative 的非空白字符数：少于 1100 或多于 1300 都要继续修改，达到范围后才输出。")
+            appendLine("- 根据扩写后的正文重建 summary、action_coverage、forward_hook、ending_scene 和 introduced_characters；evidence 必须逐字摘自新 narrative。")
+            appendLine("- 只输出一个完整合法 JSON 对象，不要 Markdown、解释、注释或字数报告。")
+            appendLine()
+            appendLine("【待扩写 JSON】")
+            appendLine(rawResponse.take(8000))
+            appendLine()
+            appendLine("【输出格式】")
+            appendLine("""{"narrative":"4-6段、1100-1300个中文字符的扩写后小说正文","summary":"一句话记录正文事实和新变化","action_coverage":[{"action":"用户的一个原子动作","evidence":"从新 narrative 逐字摘录的连续原句"}],"forward_hook":{"cause":"由本轮既有因果触发的新变化","evidence":"最后一个用户动作之后的新正文原句"},"ending_scene":{"location":"正文结尾的实际地点","present_characters":["同场NPC真实姓名"]},"introduced_characters":[{"name":"首次登场者真实姓名","occupation":"身份","relationship_to_player":"与主角关系","first_appearance":"新正文中的首次登场事实"}]}""")
+        }
+    }
+
     /**
      * 构建状态调用的提示词（单个NPC，对齐设计文档 4.4 节）
      */
@@ -501,8 +539,11 @@ class RpgPromptBuilder {
 
         sb.appendLine("【任务】")
         sb.appendLine("你是角色动态状态同步器。根据本轮实际交互，为 ${character.name} 生成增量补丁。")
-        sb.appendLine("- 只更新正文有依据的短期状态；不得改写姓名、职业、性格、背景等稳定档案。")
-        sb.appendLine("- physical_state 与 mental_state 中只写改变字段，未变化字段省略。体力范围 0-100；压力只用低/中/高。")
+        sb.appendLine("- 只更新正文有依据的变化；姓名及 manual 字段不得改写。职业、性格、背景、经历和能力不能因普通寒暄改写，但重大事件、反复行为或明确成长形成稳定新事实时必须通过 attributes 刷新。")
+        sb.appendLine("- physical_state 与 mental_state 中只写改变字段，未变化字段省略；取值遵守 character_fields 对同 key 的范围、选项和语义。")
+        sb.appendLine("- attributes 使用【世界整体设定.character_fields】中的 key。dynamic 字段有明确即时变化时更新；event 字段只有本轮形成可持续变化时更新；manual 字段不得输出。")
+        sb.appendLine("- 逐项检查 dynamic 字段的 description 和世界 rules；本轮触发消耗、恢复、累积、缓解、暴露或受损条件时必须输出更新后的最终值，不能因变化较小或动作成功而省略。")
+        sb.appendLine("- 人物特征、经历、外貌、能力和自定义字段在正文确有长期改变时必须刷新；重大事件可直接形成经历，性格变化通常需要重大选择或反复行为证据。不得每轮机械改写，也不得因为旧卡已有内容就永远忽略新经历。")
         sb.appendLine("- relationship_to_player 表示对 $playerName 的变化，favor_delta 与 trust_delta 是本轮增减量，不是最终总值，通常控制在 -10 到 10。")
         sb.appendLine("- inventory_changes 只记录本轮明确获得或失去的物品。")
         sb.appendLine("- 补同步时必须以【角色当前状态】为基准；已经体现在当前状态中的关系或物品变化不得重复累计。")
@@ -546,7 +587,7 @@ class RpgPromptBuilder {
         sb.appendLine()
 
         sb.appendLine("【输出模板】")
-        sb.appendLine("""{"emotion":null,"physical_state":null,"mental_state":null,"relationship_to_player":{"favor_delta":0,"trust_delta":0,"stage":null},"inventory_changes":[]}""")
+        sb.appendLine("""{"emotion":null,"physical_state":null,"mental_state":null,"attributes":{},"relationship_to_player":{"favor_delta":0,"trust_delta":0,"stage":null},"inventory_changes":[]}""")
 
         return sb.toString()
     }
@@ -563,6 +604,7 @@ class RpgPromptBuilder {
             "emotion" to card.emotion,
             "physical_state" to card.physicalState,
             "mental_state" to card.mentalState,
+            "custom_attributes" to card.customAttributes,
             "relationships" to card.relationships
         )
     }
@@ -575,6 +617,7 @@ class RpgPromptBuilder {
             "emotion" to card.emotion,
             "physical_state" to card.physicalState,
             "mental_state" to card.mentalState,
+            "custom_attributes" to card.customAttributes,
             "relationships" to card.relationships
         )
     }
@@ -588,6 +631,7 @@ class RpgPromptBuilder {
             "emotion" to card.emotion,
             "physical_state" to card.physicalState,
             "mental_state" to card.mentalState,
+            "custom_attributes" to card.customAttributes,
             "relationship_to_player" to relationship,
             "inventory" to card.inventory
         )

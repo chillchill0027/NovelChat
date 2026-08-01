@@ -73,6 +73,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     fileStorage.savePlayerState(targetCharacterId, playerState)
                 }
                 var storyState = fileStorage.loadStoryState(targetCharacterId)
+                val worldSetting = fileStorage.loadWorldSetting(targetCharacterId) ?: WorldSetting()
                 val narratives = fileStorage.loadAllNarratives(targetCharacterId)
                 StateSyncPolicy.reconcilePersistedNarratives(storyState, narratives).let { recovered ->
                     if (recovered != storyState) {
@@ -126,6 +127,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (characterId != targetCharacterId) return@launch
                 _uiState.value = ChatUiState(
                     messages = messages, playerState = playerState, storyState = storyState,
+                    worldSetting = worldSetting,
                     npcCards = npcCards, worldbookEntries = worldbookEntries,
                     currentRound = storyState.currentRound,
                     isReady = true,

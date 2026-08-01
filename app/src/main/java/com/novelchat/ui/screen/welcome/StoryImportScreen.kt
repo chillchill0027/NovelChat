@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.ui.theme.AccentRed
 import com.novelchat.ui.theme.DarkBg
 import com.novelchat.ui.theme.DimText
@@ -470,8 +471,13 @@ private fun AdvancedImportGuideSheet(
                 GuideCode("player: 必须使用主角真实姓名")
                 GuideCode("npcs / worldbook / opening: 可扩展数组与对象")
             }
+            GuideSection("角色字段完全自定义") {
+                GuideText("在 world_setting.character_fields 中可重命名体力、魅力、性格、经历等内置字段，也可新增任意字段。每项可定义类型、范围、单位、适用角色、首页或详情显示，以及 dynamic、event、manual 刷新模式。")
+                GuideCode("character_fields: [{ key, label, value_type, applies_to, display, update_mode }]")
+                GuideCode("player / npcs[].custom_attributes: 自定义字段初始值")
+            }
             GuideSection("长期设定与即时状态") {
-                GuideText("世界规则和人物长期动机写入 lore；疲劳、情绪、物品与开局现场写入 physical_state、mental_state、inventory、opening。剧情状态刷新不会覆盖 lore。")
+                GuideText("dynamic 字段随本轮明确变化刷新；event 字段只在重大事件或稳定成长成立时刷新；manual 字段仅使用导入值。性格、经历、技能和能力可随剧情证据更新，世界规则与人物 lore 仍作为稳定设定保存。")
             }
             GuideSection("世界书") {
                 GuideText("具体地点、组织、物品和事件应拆成 worldbook 条目，并填写名称、别名和触发词。应用每轮只加载相关条目，详细设定不会挤占全部上下文。")
@@ -483,7 +489,7 @@ private fun AdvancedImportGuideSheet(
                 GuideText("人物幕后信息放 lore.secrets；世界资料使用 is_secret 与 known_by_player。秘密会提供给叙事模型保持一致，但正文仍应遵守角色知识边界。")
             }
             GuideSection("容量") {
-                GuideText("最多 ${AdvancedStoryImportPolicy.MAX_NPCS} 位 NPC、${AdvancedStoryImportPolicy.MAX_WORLDBOOK_ENTRIES} 条世界书、${AdvancedStoryImportPolicy.MAX_JSON_LENGTH} 个字符。未知字段会被忽略，custom 可保存自定义键值。")
+                GuideText("最多 ${AdvancedStoryImportPolicy.MAX_NPCS} 位 NPC、${AdvancedStoryImportPolicy.MAX_WORLDBOOK_ENTRIES} 条世界书、${CharacterFieldPolicy.MAX_FIELDS} 个自定义角色字段、${AdvancedStoryImportPolicy.MAX_JSON_LENGTH} 个字符。custom_attributes 必须先在 character_fields 中定义。")
             }
             Button(
                 onClick = onLoadTemplate,

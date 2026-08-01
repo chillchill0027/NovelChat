@@ -51,6 +51,32 @@ class NarrativeQualityPolicyTest {
         assertNull(NarrativeQualityPolicy.targetLengthIssue("字".repeat(1500)))
         assertTrue(NarrativeQualityPolicy.isStyleOnlyIssue(tooShort))
         assertFalse(NarrativeQualityPolicy.containsBlockingIssue(tooShort))
+        assertTrue(NarrativeQualityPolicy.requiresLengthExpansion(tooShort))
+        assertTrue(NarrativeQualityPolicy.containsTargetLengthIssue(tooShort))
+        assertFalse(NarrativeQualityPolicy.requiresLengthExpansion(tooLong))
+    }
+
+    @Test
+    fun targetLengthImprovement_keepsCloserIntermediateExpansion() {
+        val current = "字".repeat(781)
+        val repaired = "字".repeat(920)
+
+        assertTrue(
+            NarrativeQualityPolicy.isTargetLengthImprovement(
+                currentNarrative = current,
+                repairedNarrative = repaired,
+                currentIssue = NarrativeQualityPolicy.targetLengthIssue(current),
+                repairedIssue = NarrativeQualityPolicy.targetLengthIssue(repaired)
+            )
+        )
+        assertFalse(
+            NarrativeQualityPolicy.isTargetLengthImprovement(
+                currentNarrative = repaired,
+                repairedNarrative = current,
+                currentIssue = NarrativeQualityPolicy.targetLengthIssue(repaired),
+                repairedIssue = NarrativeQualityPolicy.targetLengthIssue(current)
+            )
+        )
     }
 
     @Test

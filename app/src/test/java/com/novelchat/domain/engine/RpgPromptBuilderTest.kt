@@ -1,12 +1,14 @@
 package com.novelchat.domain.engine
 
 import com.novelchat.data.model.CharacterCard
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.data.model.IntroducedCharacter
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.NarrativeEntry
 import com.novelchat.data.model.StoryState
 import com.novelchat.data.model.StoryProgress
 import com.novelchat.data.model.SummaryEntry
+import com.novelchat.data.model.WorldSetting
 import com.novelchat.data.model.defaultModernWorldSetting
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,6 +17,61 @@ import org.junit.Test
 class RpgPromptBuilderTest {
 
     private val builder = RpgPromptBuilder()
+
+    @Test
+    fun statePrompts_includeStoryOwnedFieldContractAndLongTermRefreshRules() {
+        val world = WorldSetting(
+            name = "星海学宫",
+            description = "施法者在浮空学宫学习。",
+            characterFields = listOf(
+                CharacterFieldDefinition(
+                    key = "stamina",
+                    label = "魔法值",
+                    description = "施法会消耗的能量",
+                    valueType = CharacterFieldDefinition.TYPE_NUMBER,
+                    minValue = 0,
+                    maxValue = 200,
+                    updateMode = CharacterFieldDefinition.UPDATE_DYNAMIC
+                ),
+                CharacterFieldDefinition(
+                    key = "personality",
+                    label = "性格与行为特征",
+                    description = "稳定行为改变后刷新",
+                    group = CharacterFieldDefinition.GROUP_PROFILE,
+                    updateMode = CharacterFieldDefinition.UPDATE_EVENT
+                )
+            )
+        )
+        val taskPrompt = builder.buildTaskAssignmentPrompt(
+            worldSetting = world,
+            playerState = PlayerState(name = "林克"),
+            storyState = StoryState(),
+            activeCharacters = emptyList(),
+            worldbookEntries = emptyList(),
+            narrative = "林克连续保护同伴并耗尽魔力。",
+            summary = "林克保护同伴并耗尽魔力。",
+            recentNarratives = emptyList()
+        )
+        val characterPrompt = builder.buildCharacterStatePrompt(
+            worldSetting = world,
+            character = CharacterCard(name = "王常", personality = "谨慎"),
+            recentNarratives = emptyList(),
+            narrative = "王常在危机中选择承担责任。",
+            userMessage = "让王常决定"
+        )
+
+        assertTrue(taskPrompt.contains("魔法值"))
+        assertTrue(taskPrompt.contains("personality"))
+        assertTrue(taskPrompt.contains("attributes"))
+        assertTrue(taskPrompt.contains("长期改变"))
+        assertTrue(taskPrompt.contains("强制动态字段核对"))
+        assertTrue(taskPrompt.contains("施法消耗魔力"))
+        assertTrue(taskPrompt.contains("本轮结束后的最终值"))
+        assertTrue(characterPrompt.contains("性格与行为特征"))
+        assertTrue(characterPrompt.contains("attributes"))
+        assertTrue(characterPrompt.contains("重大事件"))
+        assertTrue(characterPrompt.contains("本轮触发消耗"))
+    }
 
     @Test
     fun taskPrompt_usesValidCompactDynamicStateSchema() {
@@ -366,5 +423,22 @@ class RpgPromptBuilderTest {
         assertTrue(prompt.contains("action_coverage"))
         assertTrue(prompt.contains("introduced_characters"))
         assertTrue(!prompt.contains("【世界整体设定】"))
+    }
+
+    @Test
+    fun narrativeLengthExpansionPrompt_demandsMaterialExpansionWithoutNewDecisions() {
+        val prompt = builder.buildNarrativeLengthExpansionPrompt(
+            rawResponse = """{"narrative":"祁越停止施法。","summary":"誓痕发热。"}""",
+            issue = "正文低于目标篇幅：当前约 781 字，目标为 1000-1500 字"
+        )
+
+        assertTrue(prompt.contains("中文小说扩写编辑"))
+        assertTrue(prompt.contains("1100-1300 个中文字符"))
+        assertTrue(prompt.contains("不能原样返回"))
+        assertTrue(prompt.contains("NPC即时反应"))
+        assertTrue(prompt.contains("不新增主角的重大决定"))
+        assertTrue(prompt.contains("祁越停止施法"))
+        assertTrue(prompt.contains("action_coverage"))
+        assertFalse(prompt.contains("【世界整体设定】"))
     }
 }

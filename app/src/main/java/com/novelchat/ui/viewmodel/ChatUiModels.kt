@@ -4,11 +4,13 @@ import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.StoryState
 import com.novelchat.data.model.WorldbookEntry
+import com.novelchat.data.model.WorldSetting
 
 data class ChatUiState(
     val messages: List<ChatMessageItem> = emptyList(),
     val playerState: PlayerState? = null,
     val storyState: StoryState? = null,
+    val worldSetting: WorldSetting? = null,
     val npcCards: List<CharacterCard> = emptyList(),
     val worldbookEntries: List<WorldbookEntry> = emptyList(),
     val isReady: Boolean = false,

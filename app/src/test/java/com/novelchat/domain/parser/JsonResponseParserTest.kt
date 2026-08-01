@@ -326,7 +326,7 @@ class JsonResponseParserTest {
 
         val result = parser.parseTaskAssignment(raw)
 
-        assertEquals(100, result.playerUpdate?.changes?.risk)
+        assertEquals(135, result.playerUpdate?.changes?.risk)
         assertEquals(82, result.playerUpdate?.changes?.physicalState?.stamina)
         assertEquals(2, result.itemTransfers.first().quantity)
     }
@@ -385,7 +385,7 @@ class JsonResponseParserTest {
         assertEquals(listOf("周明", "林克"), result.storyUpdate?.activeCharacters)
         assertEquals(listOf("前往A07窗口登记"), result.storyUpdate?.pendingEvents)
         assertEquals("123", result.playerUpdate?.reason)
-        assertEquals(100, result.playerUpdate?.changes?.risk)
+        assertEquals(120, result.playerUpdate?.changes?.risk)
         assertEquals("9", result.playerUpdate?.changes?.mentalState?.focus)
         assertEquals("true", result.playerUpdate?.changes?.storyProgress?.currentGoal)
         assertEquals(34, result.newCharacters.single().age)
@@ -417,6 +417,7 @@ class JsonResponseParserTest {
               "emotion": "震惊",
               "physical_state": {"stamina": 82},
               "mental_state": {"stress": "高", "focus": "核对中奖彩票"},
+              "attributes": {"personality": "经历冲击后更谨慎", "arcane_affinity": 7},
               "relationship_to_player": {"favor_delta": 3, "trust_delta": 1, "stage": "初识"},
               "inventory_changes": []
             }
@@ -427,6 +428,8 @@ class JsonResponseParserTest {
         assertEquals("震惊", result.emotion)
         assertEquals(82, result.physicalState?.stamina)
         assertEquals("高", result.mentalState?.stress)
+        assertEquals("经历冲击后更谨慎", result.attributes["personality"])
+        assertEquals("7", result.attributes["arcane_affinity"])
         assertEquals(3, result.relationshipToPlayer?.favorDelta)
     }
 
@@ -508,5 +511,39 @@ class JsonResponseParserTest {
         assertEquals(listOf("顾宁"), result.opening.activeCharacters)
         assertEquals("true", result.opening.globalFlags["搬家完成"])
         assertEquals(listOf("回复林越"), result.opening.pendingEvents)
+    }
+
+    @Test
+    fun parseStoryParseResult_readsCharacterDefinitionsCapabilitiesAndCustomValues() {
+        val result = parser.parseStoryParseResult(
+            """{
+              "world_setting": {
+                "name": "星海学宫",
+                "description": "施法者在浮空学宫学习。",
+                "character_fields": [
+                  {"key":"stamina","label":"魔法值","group":"status","value_type":"number","min_value":0,"max_value":200,"default_value":"160","unit":"MP","display":"primary","update_mode":"dynamic"},
+                  {"key":"known_spells","label":"已知法术","group":"ability","value_type":"list","default_value":"照明术","update_mode":"event"}
+                ]
+              },
+              "player": {
+                "name":"林克",
+                "charm":61,
+                "action_skill":44,
+                "willpower":72,
+                "resilience":55,
+                "physical_state":{"stamina":180},
+                "custom_attributes":{"known_spells":["照明术","护盾术"]}
+              }
+            }""".trimIndent()
+        )
+
+        assertEquals("魔法值", result.worldSetting.characterFields.first { it.key == "stamina" }.label)
+        assertEquals(200, result.worldSetting.characterFields.first { it.key == "stamina" }.maxValue)
+        assertEquals(180, result.player.physicalState.stamina)
+        assertEquals(61, result.player.charm)
+        assertEquals(44, result.player.actionSkill)
+        assertEquals(72, result.player.willpower)
+        assertEquals(55, result.player.resilience)
+        assertEquals("照明术、护盾术", result.player.customAttributes["known_spells"])
     }
 }

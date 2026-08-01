@@ -2,13 +2,20 @@ package com.novelchat.ui.viewmodel
 
 import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.CharacterNamingPolicy
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.Relationship
 import com.novelchat.data.remote.model.ParsedNpc
 import com.novelchat.domain.engine.TaskAssignmentRosterPolicy
 
 internal object ImportedCharacterPolicy {
 
-    fun createCard(npc: ParsedNpc, playerName: String, createdAt: String): CharacterCard {
+    fun createCard(
+        npc: ParsedNpc,
+        playerName: String,
+        createdAt: String,
+        characterFields: List<CharacterFieldDefinition> = emptyList()
+    ): CharacterCard {
         val relationship = npc.relationshipToPlayer.trim()
         val card = CharacterCard(
             id = npc.name,
@@ -24,6 +31,11 @@ internal object ImportedCharacterPolicy {
             lore = npc.lore,
             physicalState = npc.physicalState,
             mentalState = npc.mentalState,
+            customAttributes = CharacterFieldPolicy.normalizeImportedAttributes(
+                npc.customAttributes,
+                characterFields,
+                CharacterFieldDefinition.TARGET_NPC
+            ),
             inventory = npc.inventory,
             emotion = npc.mentalState.mood.ifBlank { "平静" },
             relationshipStatus = TaskAssignmentRosterPolicy.relationshipStatusFor(relationship),

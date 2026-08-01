@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novelchat.NovelChatApp
 import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.CharacterIdentityPolicy
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.domain.engine.CharacterProfilePolicy
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 
 data class CharacterUiState(
     val playerName: String = "",
+    val characterFields: List<CharacterFieldDefinition> = emptyList(),
     val activeCharacters: List<CharacterCard> = emptyList(),
     val poolCharacters: List<CharacterCard> = emptyList(),
     val isLoading: Boolean = false,
@@ -58,6 +60,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
             }
             try {
                 val playerName = fileStorage.loadPlayerState(characterId)?.name.orEmpty()
+                val characterFields = fileStorage.loadWorldSetting(characterId)?.characterFields.orEmpty()
                 val all = CharacterIdentityPolicy.reconcileRoster(
                     fileStorage.loadAllCharacterCards(characterId)
                 ).cards.map { card ->
@@ -69,6 +72,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
                 ) return@launch
                 _uiState.value = CharacterUiState(
                     playerName = playerName,
+                    characterFields = characterFields,
                     activeCharacters = all.filter { it.status == "active" },
                     poolCharacters = all.filter { it.status == "pool" },
                     isLoading = false

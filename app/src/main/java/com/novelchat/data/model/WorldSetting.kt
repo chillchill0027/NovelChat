@@ -10,5 +10,6 @@ data class WorldSetting(
     @SerializedName("tone") val tone: String = "",
     @SerializedName("forbidden") val forbidden: List<String> = emptyList(),
     @SerializedName("description") val description: String = "",
-    @SerializedName("lore") val lore: WorldLore = WorldLore()
+    @SerializedName("lore") val lore: WorldLore = WorldLore(),
+    @SerializedName("character_fields") val characterFields: List<CharacterFieldDefinition> = emptyList()
 )

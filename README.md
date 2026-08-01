@@ -2,7 +2,7 @@
 
 AI 驱动的互动叙事引擎。Android 原生应用。
 
-当前版本：`1.0.1`
+当前版本：`1.0.2`
 
 ## 快速开始
 
@@ -32,11 +32,13 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 5. 点击「现代开局」进入默认故事，或点击「导入故事」选择 AI 识别/高级 JSON 接入
 6. 确认解析结果与主角设定，然后进入正式剧情模式
 
-高级接入支持从文件、剪贴板或内置模板导入版本化 JSON。世界规则、角色长期动机、初始身心状态、物品、世界书关系和开局现场都会结构化保存。接入材料：
+高级接入支持从文件、剪贴板或内置模板导入版本化 JSON。世界规则、角色长期动机、初始身心状态、物品、世界书关系和开局现场都会结构化保存。`world_setting.character_fields` 可定义整张角色卡：内置字段可重命名、改范围和显示位置，也可新增任意字段；初始值写入 `custom_attributes`，后续按 `dynamic`、`event`、`manual` 规则随剧情刷新。接入材料：
 
 - [`docs/ADVANCED_STORY_IMPORT_GUIDE.md`](docs/ADVANCED_STORY_IMPORT_GUIDE.md)：完整操作与字段指南
 - [`docs/advanced_story_import_v1.example.json`](docs/advanced_story_import_v1.example.json)：可直接导入的完整示例
+- [`docs/advanced_story_import_magic_academy.example.json`](docs/advanced_story_import_magic_academy.example.json)：把体力、风险和世界专属指标改造成魔法系统的完整示例
 - [`docs/advanced_story_import_v1.schema.json`](docs/advanced_story_import_v1.schema.json)：机器可读 JSON Schema
+- [`docs/MAGIC_ACADEMY_QA_REPORT.md`](docs/MAGIC_ACADEMY_QA_REPORT.md)：高级魔法故事十轮 DeepSeek 真机验证与状态曲线
 
 默认故事方向：
 
@@ -57,7 +59,7 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 - 主角和 NPC 在剧情中使用姓名交流，身份作为辅助信息展示；旧存档中的“邻居A”等占位称呼会稳定映射为不同姓名
 - 用户输入的连续动作会按原顺序扩写为场景、反馈和人物反应，并主动续写一个合理后果或新情节
 - 每轮行动支持复制、修改和重新生成；新旧存档都会回到目标轮开始前原位重建，并替换该轮之后的旧分支
-- 主角卡首页聚焦体力、压力和风险，NPC 卡首页聚焦关系阶段、情绪、健康与信任；高频波动明细放在详情页
+- 主角与 NPC 角色卡由当前故事的字段契约决定：首页最多显示用户指定的关键判断项，完整状态、性格、经历和能力放在详情页；旧故事自动使用兼容默认字段
 - 生成过程中返回会先确认是否停止，状态落盘阶段会阻止误退出；临时网络错误会在正文开始前有限重试
 - 损坏的关键存档会显示恢复警告且不会被空默认值覆盖；服务端错误会脱敏并限制长度后再展示
 
@@ -77,10 +79,12 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 - **WorldbookMatcher**: 三种关键词触发方式匹配世界书条目
 - **JsonResponseParser**: 健壮的 AI 响应 JSON 提取、松散类型兼容与降级
 - **AdvancedStoryImportPolicy**: 严格校验高级故事 JSON、实名角色和开局名册
+- **CharacterFieldPolicy**: 合并故事字段定义、约束类型和范围、读取内置/自定义角色值并保持旧存档兼容
 - **LorePromptSnapshotPolicy**: 将详细世界/角色设定压缩为适配本地小模型的有界上下文
 - **NarrativeQualityPolicy**: 校验动作覆盖、分段、主动续写、结尾场景和首次登场人物
 - **TaskAssignmentRosterPolicy**: 保证在场人物有真实姓名和对应角色卡
 - **TaskAssignmentQualityPolicy**: 拒绝结构合法但没有任何状态变化的空壳任务分配
+- **TaskAssignmentMergePolicy**: 合并任务分配重试中分别有效的局部字段，避免后一次修复覆盖前一次正确状态
 - **TaskAssignmentExecutionPolicy**: 清洗并验证事件、世界书更新和物品转移，避免无法定位的更新被误判为成功
 - **CharacterReferencePolicy**: 用姓名、稳定 ID 和唯一身份线索解析旧剧情称呼，避免同一角色重复建卡或误认
 - **StateSyncPolicy**: 记录未完成状态同步，并在后续回合恢复

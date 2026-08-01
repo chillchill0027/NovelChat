@@ -475,7 +475,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     name = ws.name, genre = ws.genre, techLevel = ws.techLevel,
                     magicLevel = ws.magicLevel, tone = ws.tone,
                     forbidden = ws.forbidden, description = ws.description,
-                    lore = ws.lore
+                    lore = ws.lore,
+                    characterFields = ws.characterFields
                 ))
 
                 // 保存主角
@@ -487,9 +488,17 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     personality = p.personality, background = p.background,
                     appearance = p.appearance,
                     skills = p.skills.map { PlayerSkill(name = it, level = 1) },
+                    level = p.level,
+                    charm = p.charm,
+                    huntingSkill = p.actionSkill,
+                    socialRank = p.socialRank,
+                    luck = p.luck,
+                    alpha = p.willpower,
+                    resistance = p.resilience,
                     lore = p.lore,
                     physicalState = p.physicalState,
                     mentalState = p.mentalState,
+                    customAttributes = p.customAttributes,
                     inventory = p.inventory
                 ))
 
@@ -498,7 +507,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     val card = ImportedCharacterPolicy.createCard(
                         npc = npc,
                         playerName = playerName,
-                        createdAt = createdAt
+                        createdAt = createdAt,
+                        characterFields = ws.characterFields
                     )
                     fileStorage.saveCharacterCard(characterId, card)
                 }
@@ -732,6 +742,10 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
 - 从文字中提取：世界整体设定、主角信息、NPC角色、世界书条目和可直接开始游玩的开局状态
 - 优先保留用户明确给出的事实；未提到的长期秘密、关系冲突和历史不要擅自编造，允许使用空字符串、[] 或 {}
 - lore 保存不应被短期剧情覆盖的长期规则和人物动机；瞬时身心状态放 physical_state / mental_state
+- world_setting.character_fields 定义整张角色卡。优先采用用户使用的概念和名称；即使原文没有列出数值面板，也要依据题材生成一组有判断价值的字段，并给主角/NPC 补齐可信初值
+- character_fields 的 update_mode：dynamic 用于体力、魔力、情绪等即时状态；event 用于性格、经历、外貌、能力、等级等只有剧情形成长期改变时才刷新的字段；manual 用于不应由剧情自动改写的身份字段
+- 内置 key 可以改 label、description、范围、选项和显示位置：occupation、appearance、personality、background、skills、level、charm、action_skill、social_rank、luck、willpower、resilience、stamina、health、fatigue、hunger、pain、mood、stress、focus、risk、relationship_stage、favor、trust
+- 新增 key 必须使用小写字母/数字/下划线，并把人物初值写入 custom_attributes。不要创建同义重复字段
 - 主角必须有自然的具体姓名；每个 NPC 也必须有具体姓名，禁止“主角、玩家、邻居A、店员、陌生人”等泛称
 - 角色身份必须与具体姓名同时存在，例如“邻居王常”，不能只保留身份
 - 世界总体规则放 world_setting.lore；具体地点、组织、事件、物品和可检索资料拆成 worldbook，避免把全部资料塞进一个长 description
@@ -753,13 +767,20 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
       "factions": ["主要阵营"], "conflicts": ["长期矛盾"],
       "rules": ["不可违背的世界规则"], "themes": ["主题"],
       "narrative_style": "叙事风格", "custom": {"自定义字段": "值"}
-    }
+    },
+    "character_fields": [
+      {"key": "stamina", "label": "体力或题材对应名称", "description": "字段在本故事里的精确定义", "group": "status", "value_type": "number", "min_value": 0, "max_value": 100, "options": [], "default_value": "100", "unit": "", "applies_to": "all", "display": "primary", "primary_for": "player", "update_mode": "dynamic", "order": 10},
+      {"key": "personality", "label": "人物特征", "description": "长期行为形成的人格特征", "group": "profile", "value_type": "text", "default_value": "", "applies_to": "all", "display": "detail", "primary_for": "all", "update_mode": "event", "order": 20},
+      {"key": "story_specific_key", "label": "题材自定义字段", "description": "何时变化、如何判断", "group": "ability", "value_type": "number/text/choice/list", "min_value": 0, "max_value": 100, "options": [], "default_value": "", "unit": "", "applies_to": "all/player/npc", "display": "primary/detail/hidden", "primary_for": "all/player/npc", "update_mode": "dynamic/event/manual", "order": 100}
+    ]
   },
   "player": {
     "name": "主角名字", "age": 20, "gender": "性别", "race": "种族",
     "class": "职业", "personality": "性格描述",
     "background": "背景故事", "appearance": "外貌描述",
-    "skills": ["技能列表"],
+    "skills": ["技能列表"], "level": 1, "charm": 25,
+    "action_skill": 10, "social_rank": "E", "luck": 50,
+    "willpower": 15, "resilience": 20,
     "lore": {
       "aliases": ["别名"], "role": "故事角色", "pronouns": "代词",
       "birth_date": "生日", "nationality": "国籍", "residence": "住处",
@@ -773,6 +794,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     },
     "physical_state": {"stamina": 100, "health": "良好", "injuries": [], "fatigue": "无", "hunger": "不饿", "pain": "无"},
     "mental_state": {"mood": "情绪", "stress": "压力", "focus": "关注点", "current_thoughts": "当前想法"},
+    "custom_attributes": {"story_specific_key": "按 character_fields 类型填写的初值"},
     "inventory": [{"name": "物品", "quantity": 1, "type": "类型", "description": "描述", "origin": "来源", "acquired_at": "获得时间"}]
   },
   "opening": {
@@ -793,6 +815,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
        "knowledge": [], "boundaries": [], "relationship_notes": {}, "custom": {}},
      "physical_state": {"stamina": 100, "health": "良好", "injuries": [], "fatigue": "无", "hunger": "不饿", "pain": "无"},
      "mental_state": {"mood": "情绪", "stress": "压力", "focus": "关注点", "current_thoughts": "当前想法"},
+     "custom_attributes": {"story_specific_key": "按 character_fields 类型填写的初值"},
      "inventory": []}
   ],
   "worldbook": [

@@ -15,8 +15,8 @@ all else.
 
 - `app/src/main/java/com/novelchat/ui`: Compose screens and UI policies.
 - `app/src/main/java/com/novelchat/ui/viewmodel`: screen state and user flows.
-- `app/src/main/java/com/novelchat/domain/engine`: story generation pipeline.
-- `app/src/main/java/com/novelchat/domain/prompt`: model prompts and snapshots.
+- `app/src/main/java/com/novelchat/domain/engine`: story generation pipeline,
+  model prompts, state policies, and round orchestration.
 - `app/src/main/java/com/novelchat/data/remote`: OpenAI-compatible API client.
 - `app/src/main/java/com/novelchat/data/storage`: JSON persistence and migration.
 - `app/src/main/java/com/novelchat/data/model`: persisted and transport models.

@@ -29,6 +29,7 @@ data class PlayerState(
     @SerializedName("skills") val skills: List<PlayerSkill> = emptyList(),
     @SerializedName("physical_state") val physicalState: PhysicalState = PhysicalState(),
     @SerializedName("mental_state") val mentalState: MentalState = MentalState(),
+    @SerializedName("custom_attributes") val customAttributes: Map<String, String> = emptyMap(),
     @SerializedName("relationships") val relationships: Map<String, Relationship> = emptyMap(),
     @SerializedName("inventory") val inventory: List<InventoryItem> = emptyList(),
     @SerializedName("quest_log") val questLog: List<Quest> = emptyList(),

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.novelchat.data.model.CharacterCard
+import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.data.model.NarrativeEntry
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.StoryState
@@ -20,6 +21,53 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class FileStorageManagerInstrumentedTest {
+    @Test
+    fun customCharacterFieldsAndValues_surviveStorageRoundTrip() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val storage = FileStorageManager(context)
+        val characterId = 9_000_000_006L
+        val field = CharacterFieldDefinition(
+            key = "arcane_affinity",
+            label = "奥术亲和",
+            group = CharacterFieldDefinition.GROUP_ABILITY,
+            valueType = CharacterFieldDefinition.TYPE_NUMBER,
+            minValue = 0,
+            maxValue = 10,
+            defaultValue = "2",
+            updateMode = CharacterFieldDefinition.UPDATE_EVENT
+        )
+
+        storage.deleteConversation(characterId)
+        try {
+            storage.initialize(characterId)
+            storage.saveWorldSetting(
+                characterId,
+                WorldSetting(name = "星海学宫", characterFields = listOf(field))
+            )
+            storage.savePlayerState(
+                characterId,
+                PlayerState(name = "林克", customAttributes = mapOf("arcane_affinity" to "7"))
+            )
+            storage.saveCharacterCard(
+                characterId,
+                CharacterCard(
+                    id = "wang_chang",
+                    name = "王常",
+                    customAttributes = mapOf("arcane_affinity" to "5")
+                )
+            )
+
+            assertEquals("奥术亲和", storage.loadWorldSetting(characterId).characterFields.single().label)
+            assertEquals("7", storage.loadPlayerState(characterId)?.customAttributes?.get("arcane_affinity"))
+            assertEquals(
+                "5",
+                storage.loadCharacterCard(characterId, "wang_chang")?.customAttributes?.get("arcane_affinity")
+            )
+        } finally {
+            storage.deleteConversation(characterId)
+        }
+    }
+
     @Test
     fun newlyReservedStoryIsNotVisibleUntilCreationCompletes() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()

@@ -2,6 +2,8 @@ package com.novelchat.ui.viewmodel
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.novelchat.data.model.CharacterFieldDefinition
+import com.novelchat.data.model.CharacterFieldPolicy
 import com.novelchat.data.model.CharacterNamingPolicy
 import com.novelchat.data.remote.model.StoryParseResult
 import com.novelchat.domain.parser.JsonResponseParser
@@ -45,6 +47,7 @@ internal object AdvancedStoryImportPolicy {
         optionalObject(root, "opening")
         optionalArray(root, "npcs")
         optionalArray(root, "worldbook")
+        validateCharacterFieldShape(root)
 
         val npcCount = root.get("npcs")?.takeIf { it.isJsonArray }?.asJsonArray?.size() ?: 0
         val worldbookCount = root.get("worldbook")?.takeIf { it.isJsonArray }?.asJsonArray?.size() ?: 0
@@ -101,6 +104,7 @@ internal object AdvancedStoryImportPolicy {
                 "opening.active_characters 中的“$unknownName”未在 npcs 中定义"
             )
         }
+        validateCharacterFields(parsed)
         return parsed
     }
 
@@ -111,9 +115,135 @@ internal object AdvancedStoryImportPolicy {
             append(" · 1 位主角")
             append(" · ${result.npcs.size} 位 NPC")
             append(" · ${result.worldbook.size} 条世界书")
+            append(" · ${CharacterFieldPolicy.effectiveDefinitions(result.worldSetting.characterFields).size} 个角色字段")
             if (ruleCount > 0) append(" · $ruleCount 条世界规则")
         }
     }
+
+    private fun validateCharacterFieldShape(root: JsonObject) {
+        val world = root.get("world_setting") ?: root.get("worldSetting") ?: return
+        if (!world.isJsonObject) return
+        val fields = world.asJsonObject.get("character_fields")
+            ?: world.asJsonObject.get("characterFields")
+            ?: return
+        if (!fields.isJsonArray) {
+            throw IllegalArgumentException("world_setting.character_fields 必须是数组")
+        }
+        if (fields.asJsonArray.size() > CharacterFieldPolicy.MAX_FIELDS) {
+            throw IllegalArgumentException(
+                "character_fields 最多支持 ${CharacterFieldPolicy.MAX_FIELDS} 个字段"
+            )
+        }
+        fields.asJsonArray.forEachIndexed { index, element ->
+            if (!element.isJsonObject) {
+                throw IllegalArgumentException("character_fields[$index] 必须是对象")
+            }
+            val field = element.asJsonObject
+            val path = "character_fields[$index]"
+            val key = field.get("key")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+            val label = field.get("label")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+            if (!CharacterFieldPolicy.isValidKey(key)) {
+                throw IllegalArgumentException("$path.key 只能使用小写字母、数字和下划线，且必须以字母开头")
+            }
+            if (label.isBlank()) throw IllegalArgumentException("$path.label 不能为空")
+            validateEnum(field, path, "value_type", setOf("number", "text", "choice", "list"))
+            validateEnum(field, path, "group", setOf("identity", "profile", "ability", "status", "relationship"))
+            validateEnum(field, path, "applies_to", setOf("all", "player", "npc"))
+            validateEnum(field, path, "display", setOf("primary", "detail", "hidden"))
+            validateEnum(field, path, "primary_for", setOf("all", "player", "npc"))
+            validateEnum(field, path, "update_mode", setOf("dynamic", "event", "manual"))
+        }
+    }
+
+    private fun validateEnum(
+        field: JsonObject,
+        path: String,
+        name: String,
+        supported: Set<String>
+    ) {
+        val value = field.get(name) ?: return
+        if (!value.isJsonPrimitive || value.asString !in supported) {
+            throw IllegalArgumentException("$path.$name 不受支持，可选值：${supported.joinToString()}")
+        }
+    }
+
+    private fun validateCharacterFields(result: StoryParseResult) {
+        val definitions = result.worldSetting.characterFields
+        val duplicate = definitions.map { it.key.trim().lowercase() }
+            .filter(String::isNotBlank)
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .firstOrNull { it.value > 1 }
+            ?.key
+        if (duplicate != null) {
+            throw IllegalArgumentException("character_fields 中重复定义了 key=$duplicate")
+        }
+        definitions.forEachIndexed { index, field ->
+            val path = "character_fields[$index]"
+            if (!CharacterFieldPolicy.isValidKey(field.key)) {
+                throw IllegalArgumentException("$path.key 只能使用小写字母、数字和下划线，且必须以字母开头")
+            }
+            if (field.label.isBlank()) throw IllegalArgumentException("$path.label 不能为空")
+            if (field.valueType !in setOf(
+                    CharacterFieldDefinition.TYPE_NUMBER,
+                    CharacterFieldDefinition.TYPE_TEXT,
+                    CharacterFieldDefinition.TYPE_CHOICE,
+                    CharacterFieldDefinition.TYPE_LIST
+                )
+            ) {
+                throw IllegalArgumentException("$path.value_type 不受支持")
+            }
+            if (field.valueType == CharacterFieldDefinition.TYPE_NUMBER && field.minValue >= field.maxValue) {
+                throw IllegalArgumentException("$path 的 min_value 必须小于 max_value")
+            }
+            if (field.valueType == CharacterFieldDefinition.TYPE_CHOICE && field.options.isEmpty()) {
+                throw IllegalArgumentException("$path 使用 choice 时必须提供 options")
+            }
+            if (field.key in numericBuiltIns && field.valueType != CharacterFieldDefinition.TYPE_NUMBER) {
+                throw IllegalArgumentException("内置数值字段 ${field.key} 的 value_type 必须是 number")
+            }
+            if (field.key in CharacterFieldPolicy.builtInKeys || field.defaultValue.isBlank()) {
+                return@forEachIndexed
+            }
+            if (CharacterFieldPolicy.sanitizeValue(field, field.defaultValue) == null) {
+                throw IllegalArgumentException("$path.default_value 不符合字段类型或选项")
+            }
+        }
+
+        val effective = CharacterFieldPolicy.effectiveDefinitions(definitions)
+        val playerDefinitions = effective.filter {
+            CharacterFieldPolicy.appliesTo(it, CharacterFieldDefinition.TARGET_PLAYER) &&
+                CharacterFieldPolicy.usesCustomStorage(it.key, CharacterFieldDefinition.TARGET_PLAYER)
+        }.associateBy { it.key }
+        val npcDefinitions = effective.filter {
+            CharacterFieldPolicy.appliesTo(it, CharacterFieldDefinition.TARGET_NPC) &&
+                CharacterFieldPolicy.usesCustomStorage(it.key, CharacterFieldDefinition.TARGET_NPC)
+        }.associateBy { it.key }
+        validateAttributeValues("player.custom_attributes", result.player.customAttributes, playerDefinitions)
+        result.npcs.forEachIndexed { index, npc ->
+            validateAttributeValues("npcs[$index].custom_attributes", npc.customAttributes, npcDefinitions)
+        }
+    }
+
+    private fun validateAttributeValues(
+        path: String,
+        values: Map<String, String>,
+        definitions: Map<String, CharacterFieldDefinition>
+    ) {
+        values.forEach { (key, value) ->
+            val field = definitions[key]
+                ?: throw IllegalArgumentException("$path.$key 没有对应的 character_fields 定义")
+            if (CharacterFieldPolicy.sanitizeValue(field, value) == null) {
+                throw IllegalArgumentException("$path.$key 的值不符合字段类型、范围或 options")
+            }
+        }
+    }
+
+    private val numericBuiltIns = setOf(
+        "age", "level", "charm", "action_skill", "luck", "willpower", "resilience",
+        "action_tendency", "defense_threshold", "stamina", "risk", "favor", "trust"
+    )
 
     private fun validateVersion(root: JsonObject) {
         val element = root.get("schema_version") ?: root.get("schemaVersion") ?: return
@@ -180,7 +310,62 @@ internal object AdvancedStoryImportPolicy {
         "货币": "人民币",
         "叙事尺度": "以街区、工作场所和家庭关系为主"
       }
-    }
+    },
+    "character_fields": [
+      {
+        "key": "stamina",
+        "label": "精力",
+        "description": "继续工作、通勤和处理事务的可用精力",
+        "group": "status",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 120,
+        "default_value": "100",
+        "unit": "点",
+        "applies_to": "all",
+        "display": "primary",
+        "primary_for": "player",
+        "update_mode": "dynamic",
+        "order": 30
+      },
+      {
+        "key": "personality",
+        "label": "性格与行为特征",
+        "description": "只在反复行为或重大选择形成稳定倾向后刷新",
+        "group": "profile",
+        "value_type": "text",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 11
+      },
+      {
+        "key": "background",
+        "label": "重要经历",
+        "description": "已经发生并会持续影响后续判断的重要经历",
+        "group": "profile",
+        "value_type": "text",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 12
+      },
+      {
+        "key": "life_stability",
+        "label": "生活稳定度",
+        "description": "由住处、工作、财务和关系的长期稳定情况共同决定",
+        "group": "ability",
+        "value_type": "number",
+        "min_value": 0,
+        "max_value": 100,
+        "default_value": "35",
+        "unit": "%",
+        "applies_to": "all",
+        "display": "detail",
+        "update_mode": "event",
+        "order": 28
+      }
+    ]
   },
   "player": {
     "name": "林克",
@@ -192,6 +377,16 @@ internal object AdvancedStoryImportPolicy {
     "background": "林克在海临市工作三年，最近换岗并搬进云桥里。他有稳定收入，但储蓄有限，正在处理职业变化和长期关系的现实安排。",
     "appearance": "身高约一米八，短黑发，日常穿深色衬衫和轻便外套。",
     "skills": ["信息整理", "沟通协商", "基础财务常识"],
+    "level": 3,
+    "charm": 46,
+    "action_skill": 41,
+    "social_rank": "普通职员",
+    "luck": 52,
+    "willpower": 58,
+    "resilience": 49,
+    "custom_attributes": {
+      "life_stability": "35"
+    },
     "lore": {
       "aliases": ["阿克"],
       "role": "故事主角",
@@ -256,6 +451,9 @@ internal object AdvancedStoryImportPolicy {
       "background": "顾宁在南湾一家设计事务所工作，近期项目进入高压交付阶段。",
       "appearance": "齐肩黑发，常穿便于通勤的浅色风衣。",
       "relationship_to_player": "交往三年的女友",
+      "custom_attributes": {
+        "life_stability": "44"
+      },
       "lore": {
         "aliases": ["宁宁"],
         "role": "核心关系角色",
