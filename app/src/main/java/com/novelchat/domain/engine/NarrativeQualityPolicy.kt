@@ -378,17 +378,14 @@ internal object NarrativeQualityPolicy {
         return targetLengthDistance(repairedNarrative) < targetLengthDistance(currentNarrative)
     }
 
-    fun requiresLengthExpansion(issueText: String?): Boolean =
-        issueText?.split('；')
-            ?.filter { it.isNotBlank() }
-            ?.any { it.contains("正文低于目标篇幅") }
-            ?: false
-
     fun containsTargetLengthIssue(issueText: String?): Boolean =
         issueText?.split('；')
             ?.filter { it.isNotBlank() }
             ?.any { it.contains("正文低于目标篇幅") || it.contains("正文超过目标篇幅") }
             ?: false
+
+    fun isNonBlockingLengthIssue(issueText: String?): Boolean =
+        containsTargetLengthIssue(issueText) && !containsBlockingIssue(issueText)
 
     fun isStyleOnlyIssue(issueText: String?): Boolean {
         val issues = issueText

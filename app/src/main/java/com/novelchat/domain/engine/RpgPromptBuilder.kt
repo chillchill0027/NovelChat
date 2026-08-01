@@ -50,7 +50,7 @@ class RpgPromptBuilder {
         sb.appendLine("- 完整承接用户行动后，主动续写一至两个由当前因果自然产生的场景节拍，优先写他人反应、流程变化、信息到来或眼前阻力，为用户留下可回应的新局面；不要替主角做新的重大决定，也不要突然制造无关灾难。")
         sb.appendLine("- 每一段都必须产生至少一个新的外部事实、互动或流程变化。普通走路、乘车、等待和回想应压缩成一句；除非途中发生会改变选择的事件，否则不能用整轮只描写接近目的地。")
         sb.appendLine("- 先在内部把用户输入拆成连续的原子动作，再按原顺序逐项写进正文；每个动作至少要有具体执行过程和即时反馈。")
-        sb.appendLine("- narrative 写 3-6 段，正文目标为 1000-1500 个中文字符；每段承担明确推进作用，不能靠重复动作、空泛心理或景物堆砌凑字数。summary 只用一句话记录正文中已经出现的事实与新变化，禁止把正文漏写的行动偷偷补进 summary。")
+        sb.appendLine("- narrative 写 4-6 段，以 1200-1400 个中文字符为写作目标，1000-1500 个非空白字符为验收范围；请主动留出余量，不要贴着 1000 字下限写。每段承担明确推进作用，不能靠重复动作、空泛心理或景物堆砌凑字数。summary 只用一句话记录正文中已经出现的事实与新变化，禁止把正文漏写的行动偷偷补进 summary。")
         sb.appendLine("- action_coverage 为动作覆盖自检：用户的每个原子动作各写一项；evidence 必须逐字摘录 narrative 中 4-20 个汉字的连续原句，不得概括或虚构，也不要添加引号或省略号。")
         sb.appendLine("- forward_hook 记录承接完全部用户动作后主动续写的新变化；cause 写它由何种既有因果触发，evidence 逐字摘录 narrative 中位于最后一个动作之后的连续原句，且不能复用 action_coverage 的证据。")
         sb.appendLine("- ending_scene.location 写正文最后一句发生时主角脚下的实际地点，不能写出发地或下一步准备前往的地点；present_characters 只列此刻与主角物理同场的 NPC 真实姓名，不含主角、电话或消息另一端的人。")
@@ -492,33 +492,6 @@ class RpgPromptBuilder {
             appendLine()
             appendLine("【输出格式】")
             appendLine("""{"narrative":"3-6段、1000-1500个中文字符的删改后小说正文","summary":"一句话记录正文事实和新变化","action_coverage":[{"action":"用户的一个原子动作","evidence":"从新 narrative 逐字摘录的连续原句"}],"forward_hook":{"cause":"由既有因果触发的新变化","evidence":"最后一个用户动作之后的新正文原句"},"ending_scene":{"location":"正文结尾的实际地点","present_characters":["同场NPC真实姓名"]},"introduced_characters":[{"name":"首次登场者真实姓名","occupation":"身份","relationship_to_player":"与主角关系","first_appearance":"新正文中的首次登场事实"}]}""")
-        }
-    }
-
-    fun buildNarrativeLengthExpansionPrompt(
-        rawResponse: String,
-        issue: String
-    ): String {
-        return buildString {
-            appendLine("【任务】")
-            appendLine("你是中文小说扩写编辑。下方 JSON 的剧情方向与事实正确，但 narrative 明显不足 1000 个中文字符。请把正文扩写到 1100-1300 个中文字符，不能原样返回。")
-            appendLine("检测结果：$issue。")
-            appendLine()
-            appendLine("【扩写规则】")
-            appendLine("- 保留原有全部动作、对白、姓名、物品、地点、结果、因果顺序和结尾状态，不删除或压缩原文中的有效内容。")
-            appendLine("- 在现有事件内部补足可感知的施行动作、环境反馈、NPC即时反应、信息核对和自然衔接；主动续写只能延展原文已启动的直接后果。")
-            appendLine("- 不新增主角的重大决定、承诺、签字、付款、关系选择或原文没有发生的结果；不要用回忆、空泛心理、重复动作和景物堆砌凑字数。")
-            appendLine("- 使用第三人称限知视角与自然现代中文，保持 4-6 段。每段都必须带来动作、对白、物件变化、现场反馈或新信息。")
-            appendLine("- 所有引号内对白及说话者原样保留；可以在对白前后补足对方可观察的动作与反应。")
-            appendLine("- 写完后先计算 narrative 的非空白字符数：少于 1100 或多于 1300 都要继续修改，达到范围后才输出。")
-            appendLine("- 根据扩写后的正文重建 summary、action_coverage、forward_hook、ending_scene 和 introduced_characters；evidence 必须逐字摘自新 narrative。")
-            appendLine("- 只输出一个完整合法 JSON 对象，不要 Markdown、解释、注释或字数报告。")
-            appendLine()
-            appendLine("【待扩写 JSON】")
-            appendLine(rawResponse.take(8000))
-            appendLine()
-            appendLine("【输出格式】")
-            appendLine("""{"narrative":"4-6段、1100-1300个中文字符的扩写后小说正文","summary":"一句话记录正文事实和新变化","action_coverage":[{"action":"用户的一个原子动作","evidence":"从新 narrative 逐字摘录的连续原句"}],"forward_hook":{"cause":"由本轮既有因果触发的新变化","evidence":"最后一个用户动作之后的新正文原句"},"ending_scene":{"location":"正文结尾的实际地点","present_characters":["同场NPC真实姓名"]},"introduced_characters":[{"name":"首次登场者真实姓名","occupation":"身份","relationship_to_player":"与主角关系","first_appearance":"新正文中的首次登场事实"}]}""")
         }
     }
 

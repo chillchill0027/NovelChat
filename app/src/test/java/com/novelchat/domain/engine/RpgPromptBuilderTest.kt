@@ -188,8 +188,9 @@ class RpgPromptBuilderTest {
         )
 
         assertTrue(prompt.contains("每个动作"))
-        assertTrue(prompt.contains("3-6段"))
-        assertTrue(prompt.contains("1000-1500 个中文字符"))
+        assertTrue(prompt.contains("4-6 段"))
+        assertTrue(prompt.contains("1200-1400 个中文字符"))
+        assertTrue(prompt.contains("1000-1500 个非空白字符"))
         assertTrue(prompt.contains("主动续写"))
         assertTrue(prompt.contains("每句话只承担一种作用"))
         assertTrue(prompt.contains("同一个动作只写一次"))
@@ -423,22 +424,5 @@ class RpgPromptBuilderTest {
         assertTrue(prompt.contains("action_coverage"))
         assertTrue(prompt.contains("introduced_characters"))
         assertTrue(!prompt.contains("【世界整体设定】"))
-    }
-
-    @Test
-    fun narrativeLengthExpansionPrompt_demandsMaterialExpansionWithoutNewDecisions() {
-        val prompt = builder.buildNarrativeLengthExpansionPrompt(
-            rawResponse = """{"narrative":"祁越停止施法。","summary":"誓痕发热。"}""",
-            issue = "正文低于目标篇幅：当前约 781 字，目标为 1000-1500 字"
-        )
-
-        assertTrue(prompt.contains("中文小说扩写编辑"))
-        assertTrue(prompt.contains("1100-1300 个中文字符"))
-        assertTrue(prompt.contains("不能原样返回"))
-        assertTrue(prompt.contains("NPC即时反应"))
-        assertTrue(prompt.contains("不新增主角的重大决定"))
-        assertTrue(prompt.contains("祁越停止施法"))
-        assertTrue(prompt.contains("action_coverage"))
-        assertFalse(prompt.contains("【世界整体设定】"))
     }
 }

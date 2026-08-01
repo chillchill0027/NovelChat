@@ -51,9 +51,13 @@ class NarrativeQualityPolicyTest {
         assertNull(NarrativeQualityPolicy.targetLengthIssue("字".repeat(1500)))
         assertTrue(NarrativeQualityPolicy.isStyleOnlyIssue(tooShort))
         assertFalse(NarrativeQualityPolicy.containsBlockingIssue(tooShort))
-        assertTrue(NarrativeQualityPolicy.requiresLengthExpansion(tooShort))
         assertTrue(NarrativeQualityPolicy.containsTargetLengthIssue(tooShort))
-        assertFalse(NarrativeQualityPolicy.requiresLengthExpansion(tooLong))
+        assertTrue(NarrativeQualityPolicy.isNonBlockingLengthIssue(tooShort))
+        assertFalse(
+            NarrativeQualityPolicy.isNonBlockingLengthIssue(
+                "$tooShort；动作覆盖证据没有按照用户行动的原顺序出现"
+            )
+        )
     }
 
     @Test

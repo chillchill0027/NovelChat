@@ -8,6 +8,20 @@ import com.novelchat.data.model.NarrativeResult
 
 internal object NarrativeCharacterGroundingPolicy {
 
+    fun excludePlayerFromEndingScene(
+        result: NarrativeResult,
+        playerName: String
+    ): NarrativeResult {
+        val presentCharacters = result.endingScene.presentCharacters ?: return result
+        val filtered = presentCharacters
+            .map(String::trim)
+            .filter { it.isNotBlank() && it != playerName && it != "主角" }
+            .distinct()
+        return result.copy(
+            endingScene = result.endingScene.copy(presentCharacters = filtered)
+        )
+    }
+
     fun reconcile(
         result: NarrativeResult,
         narrative: String,

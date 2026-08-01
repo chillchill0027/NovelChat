@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.3 - 2026-08-01
+
+### Changed
+
+- Narrative generation now aims for 1200-1400 characters so normal model
+  variation has room inside the accepted 1000-1500 range.
+- A pure length miss no longer triggers a second AI generation call. If the
+  narrative is otherwise complete, it is saved directly and state sync
+  continues without asking the user to repeat the same action.
+- Mixed length and structural issues now repair missing actions, evidence order,
+  character grounding, and scene metadata without running a length-only pass.
+
+### Fixed
+
+- Removed repeated automatic expansion calls and the target-length rejection
+  that followed them.
+- Fixed the player name being mistaken for an unresolved NPC in
+  `ending_scene.present_characters`.
+- Increased narrative output budgets to reduce avoidable truncation on longer
+  structured responses.
+
+### Verification
+
+- Passed 393 JVM tests, Android Lint, Android instrumented-test source
+  compilation, and debug APK assembly.
+- Verified on a connected Android phone with DeepSeek: one narrative request
+  proceeded directly to task assignment and character-state refresh, with no
+  length-only narrative repair call.
+
 ## 1.0.2 - 2026-08-01
 
 ### Added

@@ -240,11 +240,14 @@ class RpgGameEngine(
                 summary = allSummaries.lastOrNull { it.turn == syncOnlyEntry.turn }?.summary.orEmpty()
             )
         } else try {
-            NarrativeIdentityAnchorPolicy.apply(
-                result = NarrativeResultContentPolicy.normalize(
-                    jsonParser.parseNarrative(narrativeResponse)
+            prepareNarrativeForValidation(
+                result = NarrativeIdentityAnchorPolicy.apply(
+                    result = NarrativeResultContentPolicy.normalize(
+                        jsonParser.parseNarrative(narrativeResponse)
+                    ),
+                    anchors = identityAnchors,
+                    playerName = playerState.name
                 ),
-                anchors = identityAnchors,
                 playerName = playerState.name
             )
         } catch (e: CancellationException) {
@@ -261,11 +264,14 @@ class RpgGameEngine(
                     ),
                     temperature = 0.45f
                 )
-                NarrativeIdentityAnchorPolicy.apply(
-                    result = NarrativeResultContentPolicy.normalize(
-                        jsonParser.parseNarrative(narrativeResponse)
+                prepareNarrativeForValidation(
+                    result = NarrativeIdentityAnchorPolicy.apply(
+                        result = NarrativeResultContentPolicy.normalize(
+                            jsonParser.parseNarrative(narrativeResponse)
+                        ),
+                        anchors = identityAnchors,
+                        playerName = playerState.name
                     ),
-                    anchors = identityAnchors,
                     playerName = playerState.name
                 )
             } catch (repairError: CancellationException) {
@@ -317,15 +323,17 @@ class RpgGameEngine(
             emit(GameEvent.Error("AI 重复了上一轮内容，本轮没有保存。点击重试即可再次生成。"))
             return@flow
         }
-        if (NarrativeQualityPolicy.containsTargetLengthIssue(narrativeIssue)) {
-            Log.e(TAG, "Narrative rejected after repair because target length is still unmet")
-            emit(GameEvent.Error("AI 连续修订后正文仍未达到 1000-1500 字，本轮没有保存。请重试这次行动。"))
-            return@flow
-        }
         if (NarrativeQualityPolicy.containsBlockingIssue(narrativeIssue)) {
             Log.e(TAG, "Narrative rejected after repair because critical quality issues remain")
-            emit(GameEvent.Error("AI 连续补写后仍遗漏关键动作、人物或现场反馈，本轮没有保存。请重试这次行动。"))
+            emit(GameEvent.Error("AI 连续修订后仍遗漏关键动作、人物或现场反馈，本轮没有保存。请重试这次行动。"))
             return@flow
+        }
+        if (NarrativeQualityPolicy.containsTargetLengthIssue(narrativeIssue)) {
+            Log.w(
+                TAG,
+                "Narrative accepted outside target length without automatic repair; " +
+                    "narrativeLength=${narrativeResult.narrative.count { !it.isWhitespace() }}"
+            )
         }
         val finalNarrative = CharacterNamingPolicy.normalizeNarrativeText(
             narrativeResult.narrative
@@ -825,8 +833,10 @@ class RpgGameEngine(
         var fullRepairAttempts = 0
         var styleRepairAttempts = 0
         while (issue != null && qualityAttempt < 3) {
+            if (NarrativeQualityPolicy.isNonBlockingLengthIssue(issue)) {
+                break
+            }
             val styleOnlyRepair = NarrativeQualityPolicy.isStyleOnlyIssue(issue)
-            val lengthExpansion = NarrativeQualityPolicy.requiresLengthExpansion(issue)
             if (
                 (styleOnlyRepair && styleRepairAttempts >= 2) ||
                 (!styleOnlyRepair && fullRepairAttempts >= 3)
@@ -838,12 +848,11 @@ class RpgGameEngine(
             Log.w(
                 TAG,
                 "Narrative quality retry $qualityAttempt: issues=${issue.issueCount()}; " +
-                    "mode=${if (lengthExpansion) "expand" else if (styleOnlyRepair) "style" else "full"}; " +
+                    "mode=${if (styleOnlyRepair) "style" else "full"}; " +
                     "responseLength=${response.length}; issue=${issue.take(420)}"
             )
             onLoading(
                 when {
-                    lengthExpansion -> "正在扩写叙事..."
                     styleOnlyRepair -> "正在精简叙事..."
                     qualityAttempt == 1 -> "正在补全遗漏剧情..."
                     else -> "正在校正人物与叙事..."
@@ -851,7 +860,6 @@ class RpgGameEngine(
             )
             try {
                 val repairPrompt = buildQualityRepairPrompt(
-                    lengthExpansion = lengthExpansion,
                     styleOnlyRepair = styleOnlyRepair,
                     fullRepairAttempts = fullRepairAttempts,
                     narrativeResponse = response,
@@ -864,17 +872,16 @@ class RpgGameEngine(
                 )
                 val repairedResponse = requestNarrativeRepair(
                     prompt = repairPrompt,
-                    temperature = when {
-                        lengthExpansion -> 0.45f
-                        styleOnlyRepair -> 0.25f
-                        else -> 0.55f
-                    }
+                    temperature = if (styleOnlyRepair) 0.25f else 0.55f
                 )
-                val repairedResult = NarrativeIdentityAnchorPolicy.apply(
-                    result = NarrativeResultContentPolicy.normalize(
-                        jsonParser.parseNarrative(repairedResponse)
+                val repairedResult = prepareNarrativeForValidation(
+                    result = NarrativeIdentityAnchorPolicy.apply(
+                        result = NarrativeResultContentPolicy.normalize(
+                            jsonParser.parseNarrative(repairedResponse)
+                        ),
+                        anchors = identityAnchors,
+                        playerName = playerName
                     ),
-                    anchors = identityAnchors,
                     playerName = playerName
                 )
                 val repairedIssue = NarrativeQualityPolicy.coverageIssue(
@@ -903,17 +910,24 @@ class RpgGameEngine(
                 break
             }
         }
-        issue?.let {
+        if (NarrativeQualityPolicy.isNonBlockingLengthIssue(issue)) {
             Log.w(
                 TAG,
-                "Narrative quality attempts exhausted: issues=${it.issueCount()}; issue=${it.take(420)}"
+                "Narrative length target not met; automatic length repair disabled; " +
+                    "issue=${issue?.take(420)}"
             )
+        } else {
+            issue?.let {
+                Log.w(
+                    TAG,
+                    "Narrative quality attempts exhausted: issues=${it.issueCount()}; issue=${it.take(420)}"
+                )
+            }
         }
         return NarrativeRepairOutcome(result, response, issue)
     }
 
     private fun buildQualityRepairPrompt(
-        lengthExpansion: Boolean,
         styleOnlyRepair: Boolean,
         fullRepairAttempts: Int,
         narrativeResponse: String,
@@ -924,10 +938,6 @@ class RpgGameEngine(
         playerName: String,
         identityAnchors: List<NarrativeIdentityAnchor>
     ): String = when {
-        lengthExpansion -> promptBuilder.buildNarrativeLengthExpansionPrompt(
-            rawResponse = narrativeResponse,
-            issue = narrativeIssue
-        )
         styleOnlyRepair -> promptBuilder.buildNarrativeStyleRepairPrompt(
             rawResponse = narrativeResponse,
             issue = narrativeIssue
@@ -963,13 +973,21 @@ class RpgGameEngine(
             )
     }
 
+    private fun prepareNarrativeForValidation(
+        result: NarrativeResult,
+        playerName: String
+    ): NarrativeResult = NarrativeCharacterGroundingPolicy.excludePlayerFromEndingScene(
+        result = result,
+        playerName = playerName
+    )
+
     private fun requestNarrative(
         messages: List<ChatMessage>,
         temperature: Float
     ): Flow<String> = aiService.chatStream(
         messages = messages,
         temperature = temperature,
-        maxTokens = 4800,
+        maxTokens = 5600,
         jsonMode = true,
         structuredOutputKind = StructuredOutputKind.NARRATIVE,
         stage = AiCallStage.NARRATIVE
@@ -981,7 +999,7 @@ class RpgGameEngine(
     ): String = aiService.chatComplete(
         messages = listOf(ChatMessage(role = "user", content = prompt)),
         temperature = temperature,
-        maxTokens = 4800,
+        maxTokens = 5600,
         jsonMode = true,
         structuredOutputKind = StructuredOutputKind.NARRATIVE,
         stage = AiCallStage.NARRATIVE_REPAIR

@@ -10,6 +10,21 @@ import org.junit.Test
 class NarrativeCharacterGroundingPolicyTest {
 
     @Test
+    fun excludePlayerFromEndingScene_removesPlayerAndDuplicatesBeforeValidation() {
+        val result = NarrativeCharacterGroundingPolicy.excludePlayerFromEndingScene(
+            result = NarrativeResult(
+                endingScene = EndingScene(
+                    "办公室",
+                    listOf("沈默", "主角", "陆砚", "陆砚")
+                )
+            ),
+            playerName = "沈默"
+        )
+
+        assertEquals(listOf("陆砚"), result.endingScene.presentCharacters)
+    }
+
+    @Test
     fun reconcile_removesNamesThatNeverAppearInFinalNarrative() {
         val result = NarrativeCharacterGroundingPolicy.reconcile(
             result = NarrativeResult(
