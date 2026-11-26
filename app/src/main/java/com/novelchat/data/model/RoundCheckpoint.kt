@@ -9,9 +9,10 @@ data class RoundCheckpoint(
     @SerializedName("player_state") val playerState: PlayerState = PlayerState(),
     @SerializedName("character_cards") val characterCards: List<CharacterCard> = emptyList(),
     @SerializedName("worldbook_entries") val worldbookEntries: List<WorldbookEntry> = emptyList(),
+    @SerializedName("provisional") val provisional: Boolean = false,
     @SerializedName("created_at") val createdAt: String = ""
 ) {
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
     }
 }

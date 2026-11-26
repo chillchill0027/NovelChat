@@ -4,6 +4,9 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.novelchat.data.model.*
+import com.novelchat.data.repo.RoundCommitJournal
+import com.novelchat.data.repo.SyncStatus
+import com.novelchat.domain.v2.memory.ChapterSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,17 +17,19 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class FileStorageManager(private val context: Context) {
+class FileStorageManager private constructor(private val filesDirProvider: () -> File) {
+
+    constructor(context: Context) : this({ context.filesDir })
 
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
     private val storedJsonCodec = StoredJsonCodec(gson)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
-    private fun getRpgRootDir(): File = File(context.filesDir, "rpg")
+    private fun getRpgRootDir(): File = File(filesDirProvider(), "rpg")
 
     private fun getBaseDir(characterId: Long): File {
         require(characterId > 0L) { "无效故事标识" }
-        return File(context.filesDir, "rpg/$characterId")
+        return File(filesDirProvider(), "rpg/$characterId")
     }
 
     private fun getWorldSettingFile(characterId: Long): File =
@@ -59,6 +64,18 @@ class FileStorageManager(private val context: Context) {
 
     private fun getStateMutationDir(characterId: Long): File =
         File(getBaseDir(characterId), "transactions/state")
+
+    private fun getNarrationFile(characterId: Long): File =
+        File(getBaseDir(characterId), "narration.json")
+
+    private fun getChaptersDir(characterId: Long): File =
+        File(getBaseDir(characterId), "memory/chapters")
+
+    private fun getSyncDir(characterId: Long): File =
+        File(getBaseDir(characterId), "sync")
+
+    private fun getSyncStatusFile(characterId: Long): File =
+        File(getSyncDir(characterId), "status.json")
 
     private fun safeFileName(raw: String): String {
         return CharacterCardFilePolicy.safeFileName(raw)
@@ -268,6 +285,29 @@ class FileStorageManager(private val context: Context) {
         )
     }
 
+    suspend fun loadRoundCheckpoint(
+        characterId: Long,
+        round: Int
+    ): RoundCheckpoint? = withContext(Dispatchers.IO) {
+        if (round <= 0) return@withContext null
+        val file = roundCheckpointFile(characterId, round)
+        val json = AtomicTextFile.readOrNull(file) ?: return@withContext null
+        storedJsonCodec.decode(json, file, RoundCheckpoint::class.java, "轮次检查点")
+    }
+
+    suspend fun saveRoundCheckpointForce(
+        characterId: Long,
+        checkpoint: RoundCheckpoint
+    ) = withContext(Dispatchers.IO) {
+        require(checkpoint.round > 0) { "检查点轮次无效" }
+        require(checkpoint.storyState.currentRound < checkpoint.round) {
+            "检查点必须保存该轮开始前的状态"
+        }
+        val file = roundCheckpointFile(characterId, checkpoint.round)
+        getRoundCheckpointDir(characterId).mkdirs()
+        AtomicTextFile.write(file, gson.toJson(checkpoint))
+    }
+
     suspend fun saveRoundCheckpointIfAbsent(
         characterId: Long,
         checkpoint: RoundCheckpoint
@@ -308,7 +348,7 @@ class FileStorageManager(private val context: Context) {
             RoundCheckpoint::class.java,
             "轮次检查点"
         )
-        require(checkpoint.version == RoundCheckpoint.CURRENT_VERSION) {
+        require(checkpoint.version in 1..RoundCheckpoint.CURRENT_VERSION) {
             "第${round}轮检查点版本不受支持"
         }
         require(checkpoint.round == round && checkpoint.storyState.currentRound < round) {
@@ -717,6 +757,121 @@ class FileStorageManager(private val context: Context) {
         )
     }
 
+    // ========== V2 叙事设置 / 章节记忆 / 原子同步 ==========
+
+    suspend fun loadNarrationSettings(characterId: Long): NarrationSettings = withContext(Dispatchers.IO) {
+        val file = getNarrationFile(characterId)
+        val json = AtomicTextFile.readOrNull(file) ?: return@withContext NarrationSettings()
+        storedJsonCodec.decode(json, file, NarrationSettings::class.java, "叙事设置").normalized()
+    }
+
+    suspend fun saveNarrationSettings(characterId: Long, settings: NarrationSettings) = withContext(Dispatchers.IO) {
+        AtomicTextFile.write(getNarrationFile(characterId), gson.toJson(settings.normalized()))
+    }
+
+    suspend fun loadChapterSummaries(characterId: Long): List<ChapterSummary> = withContext(Dispatchers.IO) {
+        val dir = getChaptersDir(characterId)
+        if (!dir.exists()) return@withContext emptyList()
+        jsonFiles(dir)
+            .map { file ->
+                storedJsonCodec.decode(
+                    AtomicTextFile.read(file),
+                    file,
+                    ChapterSummary::class.java,
+                    "章节摘要"
+                )
+            }
+            .sortedWith(compareBy<ChapterSummary> { !it.isOverview }.thenBy { it.index })
+    }
+
+    suspend fun saveChapterSummary(characterId: Long, chapter: ChapterSummary) = withContext(Dispatchers.IO) {
+        val dir = getChaptersDir(characterId)
+        dir.mkdirs()
+        val fileName = if (chapter.isOverview) {
+            "chapter_0000.json"
+        } else {
+            String.format(Locale.ROOT, "chapter_%04d.json", chapter.index.coerceAtLeast(1))
+        }
+        AtomicTextFile.write(File(dir, fileName), gson.toJson(chapter))
+    }
+
+    suspend fun deleteChapterSummariesFromRound(characterId: Long, round: Int) = withContext(Dispatchers.IO) {
+        val dir = getChaptersDir(characterId)
+        if (!dir.exists()) return@withContext
+        jsonFiles(dir).forEach { file ->
+            val chapter = storedJsonCodec.decode(
+                AtomicTextFile.read(file),
+                file,
+                ChapterSummary::class.java,
+                "章节摘要"
+            )
+            if (chapter.toTurn >= round) {
+                deleteRequired(file)
+            }
+        }
+    }
+
+    suspend fun loadSyncStatus(characterId: Long): SyncStatus = withContext(Dispatchers.IO) {
+        val file = getSyncStatusFile(characterId)
+        val json = AtomicTextFile.readOrNull(file) ?: return@withContext SyncStatus()
+        storedJsonCodec.decode(json, file, SyncStatus::class.java, "同步状态")
+    }
+
+    suspend fun saveSyncStatus(characterId: Long, status: SyncStatus) = withContext(Dispatchers.IO) {
+        getSyncDir(characterId).mkdirs()
+        AtomicTextFile.write(getSyncStatusFile(characterId), gson.toJson(status))
+    }
+
+    suspend fun loadCommitJournals(characterId: Long): List<RoundCommitJournal> = withContext(Dispatchers.IO) {
+        val dir = getSyncDir(characterId)
+        if (!dir.exists()) return@withContext emptyList()
+        jsonFiles(dir)
+            .filter { COMMIT_JOURNAL_PATTERN.matches(it.name) }
+            .map { file ->
+                storedJsonCodec.decode(
+                    AtomicTextFile.read(file),
+                    file,
+                    RoundCommitJournal::class.java,
+                    "同步提交日志"
+                )
+            }
+            .sortedBy { it.lastRound }
+    }
+
+    suspend fun saveCommitJournal(characterId: Long, journal: RoundCommitJournal) = withContext(Dispatchers.IO) {
+        require(journal.lastRound > 0) { "同步提交日志轮次无效" }
+        getSyncDir(characterId).mkdirs()
+        AtomicTextFile.write(commitJournalFile(characterId, journal.lastRound), gson.toJson(journal))
+    }
+
+    suspend fun deleteCommitJournal(characterId: Long, round: Int) = withContext(Dispatchers.IO) {
+        val file = commitJournalFile(characterId, round)
+        if (file.exists() && !file.delete()) {
+            throw IOException("无法清理同步提交日志：${file.name}")
+        }
+    }
+
+    suspend fun deleteCommitJournalsFromRound(characterId: Long, round: Int) = withContext(Dispatchers.IO) {
+        val dir = getSyncDir(characterId)
+        if (!dir.exists()) return@withContext
+        jsonFiles(dir)
+            .filter { COMMIT_JOURNAL_PATTERN.matches(it.name) }
+            .forEach { file ->
+                val journal = storedJsonCodec.decode(
+                    AtomicTextFile.read(file),
+                    file,
+                    RoundCommitJournal::class.java,
+                    "同步提交日志"
+                )
+                if (journal.lastRound >= round) {
+                    deleteRequired(file)
+                }
+            }
+    }
+
+    private fun commitJournalFile(characterId: Long, round: Int): File =
+        File(getSyncDir(characterId), "commit_${round}.json")
+
     // ========== 辅助方法 ==========
 
     private fun roundCheckpointFile(characterId: Long, round: Int): File =
@@ -771,7 +926,11 @@ class FileStorageManager(private val context: Context) {
 
     fun getCurrentTimeString(): String = LocalDateTime.now().format(dateFormatter)
 
-    private companion object {
-        val HISTORY_FILE_PATTERN = Regex("""turn_(\d+)\.json""")
+    companion object {
+        internal fun forDirectory(rootFilesDir: File): FileStorageManager =
+            FileStorageManager { rootFilesDir }
+
+        private val HISTORY_FILE_PATTERN = Regex("""turn_(\d+)\.json""")
+        private val COMMIT_JOURNAL_PATTERN = Regex("""commit_(\d+)\.json""")
     }
 }

@@ -166,6 +166,7 @@ class MainLobbyViewModel(application: Application) : AndroidViewModel(applicatio
             )
             try {
                 withContext(NonCancellable) {
+                    app.storySessionManager.closeSession(id)
                     fileStorage.deleteConversation(id)
                     removeFromIndex(id)
                 }

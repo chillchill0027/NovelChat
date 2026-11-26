@@ -71,6 +71,7 @@ data class CharacterLore(
     @SerializedName("secrets") val secrets: List<String> = emptyList(),
     @SerializedName("habits") val habits: List<String> = emptyList(),
     @SerializedName("speech_style") val speechStyle: String = "",
+    @SerializedName("sample_dialogues") val sampleDialogues: List<String> = emptyList(),
     @SerializedName("abilities") val abilities: List<String> = emptyList(),
     @SerializedName("knowledge") val knowledge: List<String> = emptyList(),
     @SerializedName("boundaries") val boundaries: List<String> = emptyList(),
@@ -98,6 +99,7 @@ data class CharacterLore(
                 weaknesses,
                 secrets,
                 habits,
+                sampleDialogues,
                 abilities,
                 knowledge,
                 boundaries

@@ -2,7 +2,7 @@
 
 AI 驱动的互动叙事引擎。Android 原生应用。
 
-当前版本：`1.0.3`
+当前版本：`2.0.0`
 
 ## 快速开始
 
@@ -74,21 +74,22 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### 核心模块
 
-- **RpgGameEngine**: 编排剧情生成、质量复核、任务分配、角色状态更新与中断恢复
-- **RpgPromptBuilder**: 构建符合设计文档的提示词模板
+- **StorySessionManager / StorySession / SyncQueue**: 二代双轨异步引擎（现已作为唯一引擎），前台纯正文流式直出，后台串行同步状态、行动建议与章节记忆，不阻塞玩家继续输入
+- **NarratorAgent / NarrativeGuard / NarrativeTextCleaner**: 纯小说流式叙事、温和后置质量门禁（防复述/元泄/截断）与极简重写
+- **StateKeeperAgent / StateDeltaParser / StateDeltaApplier**: 后台增量 JSON 状态同步、世界书增量合并与事件/好感/物品转移归属校验
+- **MemoryManager / ContextAssembler**: 分层长期记忆（10 轮章节摘要 + 60 轮总览），前缀/历史可缓存上下文装配
+- **StoryRepository / RoundCommitJournal**: 单故事锁、两阶段预写日志提交与 `provisional` 检查点回溯修补
+- **LlmScheduler / LlmMetrics / OpenAiCompatibleLlmClient**: 前台优先并发调度、SSE 空闲看门狗与 `cached_tokens` 性能追踪
 - **FileStorageManager**: 文件系统 CRUD，目录结构对齐设计文档
 - **WorldbookMatcher**: 三种关键词触发方式匹配世界书条目
 - **JsonResponseParser**: 健壮的 AI 响应 JSON 提取、松散类型兼容与降级
-- **AdvancedStoryImportPolicy**: 严格校验高级故事 JSON、实名角色和开局名册
-- **CharacterFieldPolicy**: 合并故事字段定义、约束类型和范围、读取内置/自定义角色值并保持旧存档兼容
+- **AdvancedStoryImportPolicy**: 严格校验高级故事 JSON、实名角色、`sample_dialogues` 台词示例和开局名册
+- **CharacterFieldPolicy**: 合并故事字段定义、智能格式化数值（年龄/等级/百分比）、约束类型和范围并保持旧存档兼容
 - **LorePromptSnapshotPolicy**: 将详细世界/角色设定压缩为适配本地小模型的有界上下文
 - **NarrativeQualityPolicy**: 校验动作覆盖、分段、主动续写、结尾场景和首次登场人物
 - **TaskAssignmentRosterPolicy**: 保证在场人物有真实姓名和对应角色卡
-- **TaskAssignmentQualityPolicy**: 拒绝结构合法但没有任何状态变化的空壳任务分配
-- **TaskAssignmentMergePolicy**: 合并任务分配重试中分别有效的局部字段，避免后一次修复覆盖前一次正确状态
-- **TaskAssignmentExecutionPolicy**: 清洗并验证事件、世界书更新和物品转移，避免无法定位的更新被误判为成功
 - **CharacterReferencePolicy**: 用姓名、稳定 ID 和唯一身份线索解析旧剧情称呼，避免同一角色重复建卡或误认
-- **StateSyncPolicy**: 记录未完成状态同步，并在后续回合恢复
+- **StateSyncPolicy**: 兼容旧版 V1 `state_sync_pending_from_round` 存档标记的打开恢复
 - **ApiEndpointPolicy**: 统一验证 HTTPS、局域网 HTTP、密钥传输和 `/v1` 基址兼容性
 - **ApiErrorPolicy**: 提取、截断并脱敏兼容服务的结构化错误信息
 - **ApiRetryPolicy**: 仅在响应正文开始前重试短暂网络错误和 408/429/5xx，避免流式正文重复
@@ -113,12 +114,16 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
   │   ├── events/{id}.json
   │   └── characters/{id}.json
   ├── summary/               # 缩略剧情
+  ├── chapters/              # V2 章节与总览摘要
+  ├── checkpoints/           # 回合前检查点（含 provisional 标记）
+  ├── narration.json         # 故事叙事偏好（视角/篇幅/文风示例）
+  ├── sync_status.json       # V2 后台同步状态
   └── narrative/             # 正文剧情
 ```
 
 ## 设计文档
 
-详见 [`docs/TECH_DESIGN_V1.md`](docs/TECH_DESIGN_V1.md)、[`DEVELOPMENT_STATUS.md`](DEVELOPMENT_STATUS.md) 和 [`AGENTS.md`](AGENTS.md)。
+详见 [`docs/ENGINE_V2_DESIGN.md`](docs/ENGINE_V2_DESIGN.md)、[`docs/ENGINE_V2_IMPLEMENTATION_PLAN.md`](docs/ENGINE_V2_IMPLEMENTATION_PLAN.md)、[`docs/TECH_DESIGN_V1.md`](docs/TECH_DESIGN_V1.md)、[`DEVELOPMENT_STATUS.md`](DEVELOPMENT_STATUS.md) 和 [`AGENTS.md`](AGENTS.md)。
 
 ## 开发
 

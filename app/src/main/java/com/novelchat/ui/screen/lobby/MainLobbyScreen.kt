@@ -1,17 +1,56 @@
 package com.novelchat.ui.screen.lobby
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -20,7 +59,25 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.novelchat.data.model.ConversationEntry
 import com.novelchat.data.storage.ConversationRecoveryPolicy
-import com.novelchat.ui.theme.*
+import com.novelchat.ui.theme.AmberContainer
+import com.novelchat.ui.theme.AmberPrimary
+import com.novelchat.ui.theme.CenteredAdaptiveBox
+import com.novelchat.ui.theme.CvRed
+import com.novelchat.ui.theme.CvYellow
+import com.novelchat.ui.theme.EditorialAvatar
+import com.novelchat.ui.theme.Hairline
+import com.novelchat.ui.theme.InkMuted
+import com.novelchat.ui.theme.InkPrimary
+import com.novelchat.ui.theme.InkSecondary
+import com.novelchat.ui.theme.MistContainer
+import com.novelchat.ui.theme.MistSecondary
+import com.novelchat.ui.theme.ObsidianCanvas
+import com.novelchat.ui.theme.SectionOverline
+import com.novelchat.ui.theme.SurfaceBase
+import com.novelchat.ui.theme.SurfaceHigh
+import com.novelchat.ui.theme.SurfaceLow
+import com.novelchat.ui.theme.TonalBadge
+import com.novelchat.ui.theme.rememberAdaptiveSpec
 import com.novelchat.ui.viewmodel.ConversationListItemPolicy
 import com.novelchat.ui.viewmodel.MainLobbyViewModel
 
@@ -37,6 +94,7 @@ fun MainLobbyScreen(
     val operation by viewModel.operationState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDeletion by remember { mutableStateOf<ConversationEntry?>(null) }
+    val adaptive = rememberAdaptiveSpec()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.loadConversations()
@@ -48,191 +106,418 @@ fun MainLobbyScreen(
             viewModel.clearOperationError()
         }
     }
-    Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("故事库", color = PrimaryPink, fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg),
-                    actions = {
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "故事库",
+                            color = InkPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 24.sp,
+                            letterSpacing = (-0.2).sp
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianCanvas),
+                actions = {
+                    Surface(
+                        shape = CircleShape,
+                        color = SurfaceBase,
+                        border = BorderStroke(1.dp, Hairline),
+                        modifier = Modifier.padding(end = 12.dp)
+                    ) {
                         IconButton(
                             onClick = onSettings,
-                            enabled = operation.deletingId == null
+                            enabled = operation.deletingId == null,
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.Settings, "API配置", tint = DimText)
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "API配置",
+                                tint = InkSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = ObsidianCanvas
+    ) { padding ->
+        CenteredAdaptiveBox(
+            maxWidth = adaptive.contentMaxWidth,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = adaptive.horizontalPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 36.dp)
+            ) {
+            item {
+                SectionOverline(
+                    title = "开启新篇章",
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    QuickStartCard(
+                        title = "导入故事",
+                        subtitle = "AI 解析或高级 JSON",
+                        icon = Icons.Default.AutoAwesome,
+                        iconBg = AmberContainer,
+                        iconTint = AmberPrimary,
+                        enabled = operation.deletingId == null,
+                        onClick = onNewPreset,
+                        modifier = Modifier.weight(1f)
+                    )
+                    QuickStartCard(
+                        title = "现代开局",
+                        subtitle = "海临市人生模拟",
+                        icon = Icons.Default.Explore,
+                        iconBg = MistContainer,
+                        iconTint = MistSecondary,
+                        enabled = operation.deletingId == null,
+                        onClick = onNewCustom,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                SectionOverline(
+                    title = "继续阅读",
+                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                    trailing = {
+                        if (conversations.isNotEmpty()) {
+                            TonalBadge(
+                                text = "${conversations.size} 部作品",
+                                containerColor = SurfaceLow,
+                                contentColor = InkMuted
+                            )
                         }
                     }
                 )
-            },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = DarkBg
-        ) { padding ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
-            ) {
+            }
+
+            if (operation.isLoading && conversations.isEmpty()) {
                 item {
-                    Text("新建故事", color = PrimaryPink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                }
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Card(modifier = Modifier.weight(1f).clickable(
-                            enabled = operation.deletingId == null,
-                            onClick = onNewPreset
-                        ),
-                            colors = CardDefaults.cardColors(containerColor = PanelBg), shape = RoundedCornerShape(8.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.People, null, tint = PrimaryPink, modifier = Modifier.size(32.dp))
-                                Spacer(Modifier.height(8.dp))
-                                Text("导入故事", color = BrightText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text("解析世界观与角色", color = DimText, fontSize = 11.sp)
-                            }
-                        }
-                        Card(modifier = Modifier.weight(1f).clickable(
-                            enabled = operation.deletingId == null,
-                            onClick = onNewCustom
-                        ),
-                            colors = CardDefaults.cardColors(containerColor = PanelBg), shape = RoundedCornerShape(8.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Edit, null, tint = PrimaryPurple, modifier = Modifier.size(32.dp))
-                                Spacer(Modifier.height(8.dp))
-                                Text("现代开局", color = BrightText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text("城市生活模拟器", color = DimText, fontSize = 11.sp)
-                            }
-                        }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = AmberPrimary, strokeWidth = 2.5.dp)
                     }
                 }
+            } else if (conversations.isEmpty()) {
                 item {
-                    Spacer(Modifier.height(8.dp))
-                    Text("已有故事", color = PrimaryPink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
+                        color = SurfaceLow,
+                        border = BorderStroke(1.dp, Hairline)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 36.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(SurfaceBase),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                    contentDescription = null,
+                                    tint = InkMuted,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Text(
+                                text = "书架还是空的",
+                                color = InkPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "从上方导入设定，或直接开启一段现代都市故事",
+                                color = InkSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
                 }
-                if (operation.isLoading && conversations.isEmpty()) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = PrimaryPink)
-                        }
-                    }
-                } else if (conversations.isEmpty()) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("暂无故事记录\n点击上方创建新故事", color = DimText, fontSize = 13.sp, lineHeight = 20.sp)
-                        }
-                    }
-                } else {
-                    items(conversations, key = { it.id }) { conv ->
-                        val hasStorageWarning =
-                            conv.characterDesc == ConversationRecoveryPolicy.CORRUPT_DATA_DESCRIPTION
-                        Card(Modifier.fillMaxWidth().clickable(enabled = operation.deletingId == null) { onOpenChat(conv.id) },
-                            colors = CardDefaults.cardColors(containerColor = PanelBg), shape = RoundedCornerShape(8.dp)) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(44.dp).background(PrimaryPink.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center) {
-                                    Text(conv.characterName.take(1), color = PrimaryPink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            conv.characterName,
-                                            modifier = Modifier.weight(1f),
-                                            color = BrightText,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            ConversationListItemPolicy.activityLabel(conv),
-                                            color = DimText,
-                                            fontSize = 11.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        ConversationListItemPolicy.context(conv),
-                                        color = if (hasStorageWarning) CvYellow else PrimaryPurple,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(Modifier.height(3.dp))
-                                    Text(
-                                        if (hasStorageWarning) {
-                                            "打开故事后将停止写入，避免覆盖原始存档"
-                                        } else {
-                                            ConversationListItemPolicy.preview(conv)
-                                        },
-                                        color = DimText,
-                                        fontSize = 12.sp,
-                                        lineHeight = 17.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(Modifier.width(4.dp))
-                                if (operation.deletingId == conv.id) {
-                                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            color = CvRed,
-                                            strokeWidth = 2.dp
-                                        )
-                                    }
-                                } else {
-                                    IconButton(
-                                        onClick = { pendingDeletion = conv },
-                                        enabled = operation.deletingId == null,
-                                        modifier = Modifier.size(48.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            "删除故事 ${conv.characterName}",
-                                            tint = CvRed,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
+            } else if (adaptive.cardGridColumns > 1) {
+                val rows = conversations.chunked(adaptive.cardGridColumns)
+                items(rows, key = { row -> row.joinToString("-") { it.id.toString() } }) { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowItems.forEach { conv ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                StoryLibraryCard(
+                                    conversation = conv,
+                                    isDeleting = operation.deletingId == conv.id,
+                                    interactionsEnabled = operation.deletingId == null,
+                                    onOpen = { onOpenChat(conv.id) },
+                                    onRequestDelete = { pendingDeletion = conv }
+                                )
                             }
                         }
+                        repeat(adaptive.cardGridColumns - rowItems.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
+                }
+            } else {
+                items(conversations, key = { it.id }) { conv ->
+                    StoryLibraryCard(
+                        conversation = conv,
+                        isDeleting = operation.deletingId == conv.id,
+                        interactionsEnabled = operation.deletingId == null,
+                        onOpen = { onOpenChat(conv.id) },
+                        onRequestDelete = { pendingDeletion = conv }
+                    )
                 }
             }
+        }
         }
     }
 
     pendingDeletion?.let { conversation ->
         AlertDialog(
             onDismissRequest = { pendingDeletion = null },
-            icon = { Icon(Icons.Default.DeleteForever, null, tint = CvRed) },
-            title = { Text("删除故事？", color = BrightText) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = CvRed
+                )
+            },
+            title = {
+                Text(
+                    text = "删除故事？",
+                    color = InkPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             text = {
                 Text(
-                    "“${conversation.characterName}”的剧情、角色和世界资料将被永久删除。",
-                    color = DimText
+                    text = "“${conversation.characterName}”的剧情、角色和世界资料将被永久删除，且无法恢复。",
+                    color = InkSecondary,
+                    lineHeight = 20.sp
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteConversation(conversation.id)
-                    pendingDeletion = null
-                }) {
-                    Text("删除", color = CvRed)
+                TextButton(
+                    onClick = {
+                        viewModel.deleteConversation(conversation.id)
+                        pendingDeletion = null
+                    }
+                ) {
+                    Text("删除", color = CvRed, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDeletion = null }) {
-                    Text("取消", color = DimText)
+                    Text("取消", color = InkSecondary)
                 }
             },
-            containerColor = PanelBg,
-            shape = RoundedCornerShape(8.dp)
+            containerColor = SurfaceHigh,
+            shape = RoundedCornerShape(28.dp)
         )
+    }
+}
+
+@Composable
+private fun QuickStartCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconBg: Color,
+    iconTint: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = SurfaceBase,
+        border = BorderStroke(1.dp, Hairline)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = title,
+                color = InkPrimary,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = subtitle,
+                color = InkSecondary,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun StoryLibraryCard(
+    conversation: ConversationEntry,
+    isDeleting: Boolean,
+    interactionsEnabled: Boolean,
+    onOpen: () -> Unit,
+    onRequestDelete: () -> Unit
+) {
+    val hasStorageWarning =
+        conversation.characterDesc == ConversationRecoveryPolicy.CORRUPT_DATA_DESCRIPTION
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(enabled = interactionsEnabled, onClick = onOpen),
+        shape = RoundedCornerShape(20.dp),
+        color = SurfaceBase,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (hasStorageWarning) CvYellow.copy(alpha = 0.45f) else Hairline
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EditorialAvatar(
+                    name = conversation.characterName,
+                    size = 46.dp,
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = conversation.characterName,
+                            color = InkPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        TonalBadge(
+                            text = ConversationListItemPolicy.activityLabel(conversation),
+                            containerColor = SurfaceHigh,
+                            contentColor = InkSecondary
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = ConversationListItemPolicy.context(conversation),
+                        color = if (hasStorageWarning) CvYellow else AmberPrimary.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (isDeleting) {
+                    Box(
+                        modifier = Modifier.size(44.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = CvRed,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = onRequestDelete,
+                        enabled = interactionsEnabled,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "删除故事 ${conversation.characterName}",
+                            tint = InkMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = if (hasStorageWarning) {
+                    "打开故事后将停止写入，避免覆盖原始存档"
+                } else {
+                    ConversationListItemPolicy.preview(conversation)
+                },
+                color = InkSecondary,
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+        }
     }
 }

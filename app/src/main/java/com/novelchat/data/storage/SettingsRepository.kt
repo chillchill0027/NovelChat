@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.novelchat.data.model.CreativityLevel
+import com.novelchat.data.model.LengthPreference
 import com.novelchat.data.remote.AiCallStage
 import com.novelchat.data.remote.model.ApiProfile
 import com.novelchat.data.remote.model.ApiStageRoutes
@@ -32,6 +34,8 @@ class SettingsRepository(private val context: Context) {
         private val API_PROFILES = stringPreferencesKey("api_profiles")
         private val CURRENT_PROFILE = stringPreferencesKey("current_profile")
         private val API_STAGE_ROUTES = stringPreferencesKey("api_stage_routes")
+        private val NARRATION_LENGTH = stringPreferencesKey("narration_length")
+        private val NARRATION_CREATIVITY = stringPreferencesKey("narration_creativity")
     }
 
     // ========== 单配置模式（向后兼容） ==========
@@ -44,6 +48,28 @@ class SettingsRepository(private val context: Context) {
     }
     val model: Flow<String> = context.dataStore.data.map {
         it[MODEL]?.takeIf { saved -> saved.isNotBlank() } ?: DEFAULT_MODEL
+    }
+
+    // ========== 叙事偏好设置 ==========
+
+    val narrationLength: Flow<LengthPreference> = context.dataStore.data.map {
+        LengthPreference.fromStorageKey(it[NARRATION_LENGTH]) ?: LengthPreference.STANDARD
+    }.flowOn(Dispatchers.IO)
+
+    val narrationCreativity: Flow<CreativityLevel> = context.dataStore.data.map {
+        CreativityLevel.fromStorageKey(it[NARRATION_CREATIVITY])
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun saveNarrationLength(length: LengthPreference): Unit = withContext(Dispatchers.IO) {
+        context.dataStore.edit { preferences ->
+            preferences[NARRATION_LENGTH] = length.storageKey
+        }
+    }
+
+    suspend fun saveNarrationCreativity(creativity: CreativityLevel): Unit = withContext(Dispatchers.IO) {
+        context.dataStore.edit { preferences ->
+            preferences[NARRATION_CREATIVITY] = creativity.storageKey
+        }
     }
 
     suspend fun saveApiConnection(

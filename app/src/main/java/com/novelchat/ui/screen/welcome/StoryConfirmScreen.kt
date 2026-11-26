@@ -2,33 +2,77 @@ package com.novelchat.ui.screen.welcome
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.novelchat.data.model.CharacterLore
 import com.novelchat.data.model.CharacterFieldDefinition
 import com.novelchat.data.model.CharacterFieldPolicy
+import com.novelchat.data.model.CharacterLore
 import com.novelchat.data.model.WorldLore
 import com.novelchat.data.remote.model.ParsedNpc
 import com.novelchat.data.remote.model.ParsedWorldbookItem
 import com.novelchat.data.remote.model.StoryParseResult
-import com.novelchat.ui.theme.*
+import com.novelchat.ui.theme.AmberContainer
+import com.novelchat.ui.theme.AmberPrimary
+import com.novelchat.ui.theme.CenteredAdaptiveBox
+import com.novelchat.ui.theme.ErrorContainer
+import com.novelchat.ui.theme.Hairline
+import com.novelchat.ui.theme.InkPrimary
+import com.novelchat.ui.theme.InkSecondary
+import com.novelchat.ui.theme.MistContainer
+import com.novelchat.ui.theme.ObsidianCanvas
+import com.novelchat.ui.theme.OnAmberContainer
+import com.novelchat.ui.theme.OnErrorContainer
+import com.novelchat.ui.theme.OnMistContainer
+import com.novelchat.ui.theme.OnSageContainer
+import com.novelchat.ui.theme.PrimaryPillButton
+import com.novelchat.ui.theme.SageContainer
+import com.novelchat.ui.theme.SurfaceBase
+import com.novelchat.ui.theme.SurfaceHigh
+import com.novelchat.ui.theme.TonalBadge
+import com.novelchat.ui.theme.rememberAdaptiveSpec
 import com.novelchat.ui.viewmodel.SetupViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,7 +86,7 @@ fun StoryConfirmScreen(
     val result = state.parseResult
     if (result == null) {
         LaunchedEffect(Unit) { onBack() }
-        Box(modifier = Modifier.fillMaxSize().background(DarkBg))
+        Box(modifier = Modifier.fillMaxSize().background(ObsidianCanvas))
         return
     }
     var worldExpanded by remember { mutableStateOf(false) }
@@ -50,124 +94,182 @@ fun StoryConfirmScreen(
     var openingExpanded by remember { mutableStateOf(true) }
     var npcsExpanded by remember { mutableStateOf(false) }
     var wbExpanded by remember { mutableStateOf(false) }
+    val adaptive = rememberAdaptiveSpec()
 
     BackHandler(enabled = state.isInitializing) {}
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("确认故事设定", color = GoldColor) },
+                title = {
+                    Text(
+                        text = "确认故事设定",
+                        color = InkPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack, enabled = !state.isInitializing) {
-                        Icon(Icons.AutoMirrored.Default.ArrowBack, "返回", tint = DimText)
+                        Icon(Icons.AutoMirrored.Default.ArrowBack, "返回", tint = InkSecondary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianCanvas)
             )
         },
-        containerColor = DarkBg
+        containerColor = ObsidianCanvas
     ) { padding ->
-        Column(
+        CenteredAdaptiveBox(
+            maxWidth = adaptive.readingMaxWidth,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = adaptive.horizontalPadding, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+            // Story overview hero banner
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                color = SurfaceBase,
+                border = BorderStroke(1.dp, Hairline)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = result.worldSetting.name.ifBlank { "新故事" },
+                        color = InkPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (result.worldSetting.description.isNotBlank()) {
+                        Text(
+                            text = result.worldSetting.description,
+                            color = InkSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TonalBadge(
+                            text = "主角 ${result.player.name}",
+                            containerColor = AmberContainer,
+                            contentColor = OnAmberContainer
+                        )
+                        TonalBadge(
+                            text = "${result.npcs.size} 位角色",
+                            containerColor = MistContainer,
+                            contentColor = OnMistContainer
+                        )
+                        TonalBadge(
+                            text = "${result.worldbook.size} 条世界书",
+                            containerColor = SageContainer,
+                            contentColor = OnSageContainer
+                        )
+                    }
+                }
+            }
+
+            ExpandableSection("开局场景", openingExpanded, onToggle = { openingExpanded = !openingExpanded }) {
+                Text(renderOpening(result), color = InkPrimary, fontSize = 13.sp, lineHeight = 21.sp)
+            }
             ExpandableSection("世界整体设定", worldExpanded, onToggle = { worldExpanded = !worldExpanded }) {
-                Text(renderWorldSetting(result), color = GoldColor, fontSize = 13.sp, lineHeight = 20.sp)
+                Text(renderWorldSetting(result), color = InkPrimary, fontSize = 13.sp, lineHeight = 21.sp)
             }
-            ExpandableSection("主角", playerExpanded, onToggle = { playerExpanded = !playerExpanded }) {
-                Text(renderPlayer(result), color = GoldColor, fontSize = 13.sp, lineHeight = 20.sp)
+            ExpandableSection("主角档案", playerExpanded, onToggle = { playerExpanded = !playerExpanded }) {
+                Text(renderPlayer(result), color = InkPrimary, fontSize = 13.sp, lineHeight = 21.sp)
             }
-            ExpandableSection("开局", openingExpanded, onToggle = { openingExpanded = !openingExpanded }) {
-                Text(renderOpening(result), color = GoldColor, fontSize = 13.sp, lineHeight = 20.sp)
-            }
-            ExpandableSection("NPC 角色（${result.npcs.size}个）", npcsExpanded, onToggle = { npcsExpanded = !npcsExpanded }) {
+            ExpandableSection("NPC 角色（${result.npcs.size} 位）", npcsExpanded, onToggle = { npcsExpanded = !npcsExpanded }) {
                 if (result.npcs.isEmpty()) {
-                    Text("无初始 NPC", color = DimText, fontSize = 13.sp)
+                    Text("无初始 NPC", color = InkSecondary, fontSize = 13.sp)
                 }
                 result.npcs.forEachIndexed { index, npc ->
                     if (index > 0) {
-                        HorizontalDivider(
-                            color = SurfaceLight,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
+                        HorizontalDivider(color = Hairline, modifier = Modifier.padding(vertical = 12.dp))
                     }
                     Text(
-                        "${npc.name} · ${npc.occupation.ifBlank { npc.lore.role.ifBlank { "身份未定" } }}",
-                        color = GoldColor,
+                        text = "${npc.name} · ${npc.occupation.ifBlank { npc.lore.role.ifBlank { "身份未定" } }}",
+                        color = AmberPrimary,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        renderNpc(npc, result.worldSetting.characterFields),
-                        color = DimText,
+                        text = renderNpc(npc, result.worldSetting.characterFields),
+                        color = InkSecondary,
                         fontSize = 12.sp,
-                        lineHeight = 19.sp,
+                        lineHeight = 20.sp,
                         modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
-            ExpandableSection("世界书条目（${result.worldbook.size}个）", wbExpanded, onToggle = { wbExpanded = !wbExpanded }) {
+            ExpandableSection("世界书条目（${result.worldbook.size} 条）", wbExpanded, onToggle = { wbExpanded = !wbExpanded }) {
                 result.worldbook.forEachIndexed { index, item ->
                     if (index > 0) {
-                        HorizontalDivider(
-                            color = SurfaceLight,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
+                        HorizontalDivider(color = Hairline, modifier = Modifier.padding(vertical = 12.dp))
                     }
                     Text(
-                        "${worldbookTypeLabel(item.type)} · ${item.name}",
-                        color = GoldColor,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "${worldbookTypeLabel(item.type)} · ${item.name}",
+                        color = AmberPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        renderWorldbook(item),
-                        color = DimText,
+                        text = renderWorldbook(item),
+                        color = InkSecondary,
                         fontSize = 12.sp,
-                        lineHeight = 19.sp,
-                        modifier = Modifier.padding(top = 5.dp)
+                        lineHeight = 20.sp,
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(6.dp))
 
             state.parseError?.let { error ->
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = CvRed.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    color = ErrorContainer
                 ) {
                     Text(
                         text = error,
-                        modifier = Modifier.padding(12.dp),
-                        color = CvRed,
+                        modifier = Modifier.padding(14.dp),
+                        color = OnErrorContainer,
                         fontSize = 13.sp,
-                        lineHeight = 18.sp
+                        lineHeight = 19.sp
                     )
                 }
             }
 
             if (state.isInitializing) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = GoldColor)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = AmberPrimary, strokeWidth = 2.5.dp)
                 }
             } else {
-                Button(
-                    onClick = { viewModel.confirmAndCreateStory(onStartChat) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = GoldColor)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
+                PrimaryPillButton(onClick = { viewModel.confirmAndCreateStory(onStartChat) }) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("确认并开始")
+                    Text("确认并开始", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+        }
         }
     }
 }
@@ -179,27 +281,44 @@ private fun ExpandableSection(
     onToggle: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = PanelBg),
-        shape = RoundedCornerShape(8.dp)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp),
+        color = SurfaceBase,
+        border = BorderStroke(1.dp, Hairline)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(title, color = GoldColor, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Icon(
-                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = null,
-                tint = DimText
-            )
-        }
-        AnimatedVisibility(visible = expanded) {
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                content()
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    color = InkPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = InkSecondary
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                ) {
+                    HorizontalDivider(color = Hairline, modifier = Modifier.padding(bottom = 12.dp))
+                    content()
+                }
             }
         }
     }
@@ -342,6 +461,7 @@ private fun StringBuilder.appendCharacterLore(lore: CharacterLore) {
     appendList("秘密", lore.secrets)
     appendList("习惯", lore.habits)
     appendField("说话风格", lore.speechStyle)
+    appendList("代表台词", lore.sampleDialogues, separator = " / ")
     appendList("能力", lore.abilities)
     appendList("知识", lore.knowledge)
     appendList("行为边界", lore.boundaries)

@@ -42,6 +42,13 @@ fun defaultModernCharacters(createdAt: String): List<CharacterCard> = listOf(
         personality = "精明直接，但并不刻薄，重视准时和信用",
         background = "在云桥里老小区有两套出租房，也经营一家小杂货店。",
         appearance = "常穿深色外套，说话利落，手机消息回复很快",
+        lore = CharacterLore(
+            speechStyle = "干脆利落，爱直入正题，谈到钱和期限时会留一句实话兜底",
+            sampleDialogues = listOf(
+                "小伙子，水电单我放门缝了，这周五下班前记得把房租转我。",
+                "行了，先忙你的工作，真周转不开提前说一声，别一声不吭玩消失。"
+            )
+        ),
         createdBy = "system",
         createdAt = createdAt,
         lastModified = createdAt
@@ -56,6 +63,13 @@ fun defaultModernCharacters(createdAt: String): List<CharacterCard> = listOf(
         personality = "外向、会协调资源，但遇到压力时容易把事情推给别人",
         background = "和主角在同一家公司，经常负责临时会议和客户沟通。",
         appearance = "背双肩包，常拿着咖啡，讲话速度很快",
+        lore = CharacterLore(
+            speechStyle = "语速快、套近乎，爱用“兄弟帮个忙”“很快就好”先铺垫再提要求",
+            sampleDialogues = listOf(
+                "哥们儿救个急，十点那个需求会我这边卡在客户现场了，你帮我顶二十分钟就行。",
+                "材料我都扔群里了，回头请你喝咖啡，真没几个硬骨头！"
+            )
+        ),
         createdBy = "system",
         createdAt = createdAt,
         lastModified = createdAt
@@ -70,6 +84,13 @@ fun defaultModernCharacters(createdAt: String): List<CharacterCard> = listOf(
         personality = "专业、现实，擅长判断候选人的市场价值",
         background = "手里有一份薪资更高但风险更大的岗位机会。",
         appearance = "穿着干练，消息简短清楚，习惯用语音补充细节",
+        lore = CharacterLore(
+            speechStyle = "客观直接、分条列重点，习惯先给利弊再催确认时间",
+            sampleDialogues = listOf(
+                "林克，这家给到你现在薪资上浮三十五，但前半年业务线在冲刺，你先想好能不能接受加班节奏。",
+                "岗位今天下午五点前就要排初面名单，有意向的话两点前给我个准信。"
+            )
+        ),
         createdBy = "system",
         createdAt = createdAt,
         lastModified = createdAt

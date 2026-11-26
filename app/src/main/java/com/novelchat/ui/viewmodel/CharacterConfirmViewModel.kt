@@ -33,6 +33,7 @@ class CharacterConfirmViewModel(application: Application) : AndroidViewModel(app
 
     private val app = application as NovelChatApp
     private val fileStorage = app.fileStorage
+    private val repo = app.storyRepository
     private val indexStore = app.conversationIndexStore
     private val aiService = app.aiService
     private val gson = com.google.gson.Gson()
@@ -188,53 +189,55 @@ class CharacterConfirmViewModel(application: Application) : AndroidViewModel(app
     }
 
     private suspend fun savePlayerAndReferences(current: PlayerState, updated: PlayerState) {
-        if (current.name == updated.name) {
-            fileStorage.savePlayerState(characterId, updated)
-            return
-        }
+        repo.edit(characterId) { storage ->
+            if (current.name == updated.name) {
+                storage.savePlayerState(characterId, updated)
+                return@edit
+            }
 
-        val oldName = current.name.trim()
-        val newName = updated.name.trim()
-        require(newName.isNotBlank() && !CharacterNamingPolicy.isGenericPlayerName(newName)) {
-            "主角需要使用故事中的具体姓名"
-        }
+            val oldName = current.name.trim()
+            val newName = updated.name.trim()
+            require(newName.isNotBlank() && !CharacterNamingPolicy.isGenericPlayerName(newName)) {
+                "主角需要使用故事中的具体姓名"
+            }
 
-        val storedCards = fileStorage.loadAllCharacterCards(characterId)
-        require(storedCards.none { it.name == newName }) {
-            "主角姓名不能与已有角色“$newName”重复"
-        }
-        val cardUpdates = storedCards.mapNotNull { card ->
-            renamePlayerReference(card, oldName, newName).takeIf { it != card }?.let { card to it }
-        }
-        val storedWorldbook = fileStorage.loadAllWorldbookEntries(characterId)
-        val worldbookUpdates = storedWorldbook.mapNotNull { entry ->
-            renamePlayerReference(entry, oldName, newName).takeIf { it != entry }?.let { entry to it }
-        }
+            val storedCards = storage.loadAllCharacterCards(characterId)
+            require(storedCards.none { it.name == newName }) {
+                "主角姓名不能与已有角色“$newName”重复"
+            }
+            val cardUpdates = storedCards.mapNotNull { card ->
+                renamePlayerReference(card, oldName, newName).takeIf { it != card }?.let { card to it }
+            }
+            val storedWorldbook = storage.loadAllWorldbookEntries(characterId)
+            val worldbookUpdates = storedWorldbook.mapNotNull { entry ->
+                renamePlayerReference(entry, oldName, newName).takeIf { it != entry }?.let { entry to it }
+            }
 
-        try {
-            fileStorage.savePlayerState(characterId, updated.copy(name = newName))
-            cardUpdates.forEach { (_, renamed) ->
-                fileStorage.saveCharacterCard(characterId, renamed)
-            }
-            worldbookUpdates.forEach { (_, renamed) ->
-                fileStorage.saveWorldbookEntry(characterId, renamed)
-            }
-            indexStore.update { entries ->
-                entries.map { entry ->
-                    if (entry.id == characterId) entry.copy(characterName = newName) else entry
+            try {
+                storage.savePlayerState(characterId, updated.copy(name = newName))
+                cardUpdates.forEach { (_, renamed) ->
+                    storage.saveCharacterCard(characterId, renamed)
                 }
-            }
-        } catch (e: Exception) {
-            withContext(NonCancellable) {
-                runCatching { fileStorage.savePlayerState(characterId, current) }
-                cardUpdates.forEach { (stored, _) ->
-                    runCatching { fileStorage.saveCharacterCard(characterId, stored) }
+                worldbookUpdates.forEach { (_, renamed) ->
+                    storage.saveWorldbookEntry(characterId, renamed)
                 }
-                worldbookUpdates.forEach { (stored, _) ->
-                    runCatching { fileStorage.saveWorldbookEntry(characterId, stored) }
+                indexStore.update { entries ->
+                    entries.map { entry ->
+                        if (entry.id == characterId) entry.copy(characterName = newName) else entry
+                    }
                 }
+            } catch (e: Exception) {
+                withContext(NonCancellable) {
+                    runCatching { storage.savePlayerState(characterId, current) }
+                    cardUpdates.forEach { (stored, _) ->
+                        runCatching { storage.saveCharacterCard(characterId, stored) }
+                    }
+                    worldbookUpdates.forEach { (stored, _) ->
+                        runCatching { storage.saveWorldbookEntry(characterId, stored) }
+                    }
+                }
+                throw e
             }
-            throw e
         }
     }
 

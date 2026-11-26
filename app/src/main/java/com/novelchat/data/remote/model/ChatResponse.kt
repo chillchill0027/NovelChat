@@ -26,5 +26,13 @@ data class Delta(
 data class Usage(
     @SerializedName("prompt_tokens") val promptTokens: Int = 0,
     @SerializedName("completion_tokens") val completionTokens: Int = 0,
-    @SerializedName("total_tokens") val totalTokens: Int = 0
+    @SerializedName("total_tokens") val totalTokens: Int = 0,
+    @SerializedName("prompt_cache_hit_tokens") val promptCacheHitTokens: Int? = null,
+    @SerializedName("prompt_tokens_details") val promptTokensDetails: PromptTokensDetails? = null
+) {
+    fun cachedTokens(): Int = promptCacheHitTokens ?: promptTokensDetails?.cachedTokens ?: 0
+}
+
+data class PromptTokensDetails(
+    @SerializedName("cached_tokens") val cachedTokens: Int? = null
 )

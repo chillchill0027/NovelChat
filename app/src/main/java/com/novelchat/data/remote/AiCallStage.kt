@@ -6,7 +6,9 @@ enum class AiCallStage(val storageKey: String) {
     NARRATIVE("narrative"),
     NARRATIVE_REPAIR("narrative_repair"),
     TASK_ASSIGNMENT("task_assignment"),
-    CHARACTER_STATE("character_state");
+    CHARACTER_STATE("character_state"),
+    STATE_KEEPER("state_keeper"),
+    SUMMARIZER("summarizer");
 
     companion object {
         fun fromStorageKey(value: String): AiCallStage? =

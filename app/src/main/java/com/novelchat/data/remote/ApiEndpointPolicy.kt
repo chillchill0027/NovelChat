@@ -9,8 +9,25 @@ internal object ApiEndpointPolicy {
     const val REMOTE_READ_TIMEOUT_SECONDS = 180L
     const val LOCAL_READ_TIMEOUT_SECONDS = 900L
 
+    fun sanitizeUrlInput(baseUrl: String): String {
+        if (baseUrl.isEmpty()) return ""
+        val sb = StringBuilder(baseUrl.length)
+        for (ch in baseUrl) {
+            when (ch) {
+                '：' -> sb.append(':')
+                '／' -> sb.append('/')
+                '．', '。' -> sb.append('.')
+                '－' -> sb.append('-')
+                '＿' -> sb.append('_')
+                '　' -> sb.append(' ')
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
     fun validationError(baseUrl: String, apiKey: String, model: String): String? {
-        val normalizedUrl = baseUrl.trim()
+        val normalizedUrl = sanitizeUrlInput(baseUrl).trim()
         if (normalizedUrl.isBlank()) return "API 地址不能为空"
         if (model.trim().isBlank()) return "模型名称不能为空"
         if (normalizedUrl.length > MAX_BASE_URL_LENGTH) return "API 地址过长"
@@ -53,12 +70,12 @@ internal object ApiEndpointPolicy {
     }
 
     fun normalizeBaseUrl(baseUrl: String): String {
-        val withoutTrailingSlash = baseUrl.trim().trimEnd('/')
+        val withoutTrailingSlash = sanitizeUrlInput(baseUrl).trim().trimEnd('/')
         return withoutTrailingSlash.replace(Regex("/v1$", RegexOption.IGNORE_CASE), "")
     }
 
     fun isLocalEndpoint(baseUrl: String): Boolean {
-        val host = runCatching { URI(baseUrl.trim()).host.orEmpty() }.getOrDefault("")
+        val host = runCatching { URI(sanitizeUrlInput(baseUrl).trim()).host.orEmpty() }.getOrDefault("")
         return isLocalNetworkHost(normalizeHost(host))
     }
 

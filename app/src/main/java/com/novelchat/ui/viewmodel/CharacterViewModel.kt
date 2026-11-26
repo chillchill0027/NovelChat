@@ -26,7 +26,7 @@ data class CharacterUiState(
 class CharacterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as NovelChatApp
-    private val fileStorage = app.fileStorage
+    private val repo = app.storyRepository
 
     private val _uiState = MutableStateFlow(CharacterUiState())
     val uiState: StateFlow<CharacterUiState> = _uiState.asStateFlow()
@@ -59,12 +59,15 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.value.copy(isLoading = true, errorMessage = null)
             }
             try {
-                val playerName = fileStorage.loadPlayerState(characterId)?.name.orEmpty()
-                val characterFields = fileStorage.loadWorldSetting(characterId)?.characterFields.orEmpty()
-                val all = CharacterIdentityPolicy.reconcileRoster(
-                    fileStorage.loadAllCharacterCards(characterId)
-                ).cards.map { card ->
-                    CharacterProfilePolicy.reconcile(card, playerName)
+                val (playerName, characterFields, all) = repo.edit(characterId) { storage ->
+                    val name = storage.loadPlayerState(characterId)?.name.orEmpty()
+                    val fields = storage.loadWorldSetting(characterId)?.characterFields.orEmpty()
+                    val cards = CharacterIdentityPolicy.reconcileRoster(
+                        storage.loadAllCharacterCards(characterId)
+                    ).cards.map { card ->
+                        CharacterProfilePolicy.reconcile(card, name)
+                    }
+                    Triple(name, fields, cards)
                 }
                 if (
                     this@CharacterViewModel.characterId != characterId ||
@@ -97,6 +100,61 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
         val cards = _uiState.value.activeCharacters + _uiState.value.poolCharacters
         return cards.find { it.id.isNotBlank() && it.id == reference }
             ?: cards.find { it.name == reference }
+    }
+
+    fun updateSpeechProfile(
+        cardReference: String,
+        speechStyle: String,
+        sampleDialogues: List<String>,
+        onSaved: () -> Unit = {}
+    ) {
+        val targetCharacterId = characterId
+        if (targetCharacterId <= 0L) return
+        val normalizedStyle = speechStyle.trim().take(200)
+        val normalizedSamples = sampleDialogues
+            .map { it.trim().take(120) }
+            .filter { it.isNotEmpty() }
+            .take(5)
+        viewModelScope.launch {
+            try {
+                val updatedResult = repo.edit(targetCharacterId) { storage ->
+                    val playerName = storage.loadPlayerState(targetCharacterId)?.name.orEmpty()
+                    val characterFields = storage.loadWorldSetting(targetCharacterId)?.characterFields.orEmpty()
+                    val all = CharacterIdentityPolicy.reconcileRoster(
+                        storage.loadAllCharacterCards(targetCharacterId)
+                    ).cards.map { card ->
+                        CharacterProfilePolicy.reconcile(card, playerName)
+                    }
+                    val target = all.find { it.id.isNotBlank() && it.id == cardReference }
+                        ?: all.find { it.name == cardReference }
+                        ?: return@edit null
+                    val updatedCard = target.copy(
+                        lore = target.lore.copy(
+                            speechStyle = normalizedStyle,
+                            sampleDialogues = normalizedSamples
+                        )
+                    )
+                    storage.saveCharacterCard(targetCharacterId, updatedCard)
+                    val refreshed = all.map { if (it.name == updatedCard.name) updatedCard else it }
+                    Triple(playerName, characterFields, refreshed)
+                }
+                if (updatedResult != null && this@CharacterViewModel.characterId == targetCharacterId) {
+                    val (playerName, characterFields, refreshed) = updatedResult
+                    _uiState.value = _uiState.value.copy(
+                        playerName = playerName,
+                        characterFields = characterFields,
+                        activeCharacters = refreshed.filter { it.status == "active" },
+                        poolCharacters = refreshed.filter { it.status == "pool" }
+                    )
+                    onSaved()
+                }
+            } catch (e: Exception) {
+                e.rethrowCancellation()
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = UserVisibleTextPolicy.failure("角色口吻保存失败", e.message)
+                )
+            }
+        }
     }
 
     fun clearError() {

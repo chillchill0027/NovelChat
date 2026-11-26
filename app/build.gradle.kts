@@ -1,8 +1,21 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun evalProp(key: String): String? =
+    providers.gradleProperty(key).orNull?.takeIf { it.isNotBlank() }
+        ?: localProperties.getProperty(key)?.takeIf { it.isNotBlank() }
 
 android {
     namespace = "com.novelchat"
@@ -12,10 +25,26 @@ android {
         applicationId = "com.novelchat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 6
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        if (providers.gradleProperty("novelchat.qaInstrumentation").orNull == "true" ||
+            evalProp("novelchat.runEval").equals("true", ignoreCase = true)
+        ) {
+            listOf(
+                "novelchat.runEval",
+                "novelchat.evalApiKey",
+                "novelchat.evalBaseUrl",
+                "novelchat.evalModel",
+                "novelchat.evalEngine",
+                "novelchat.evalScenario"
+            ).forEach { key ->
+                evalProp(key)?.let { value ->
+                    testInstrumentationRunnerArguments[key] = value
+                }
+            }
+        }
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -54,6 +83,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {

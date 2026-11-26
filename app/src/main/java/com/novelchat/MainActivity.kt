@@ -1,10 +1,15 @@
 package com.novelchat
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +52,9 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         setContent { NovelChatTheme { NovelChatNavGraph() } }
     }
 }
@@ -60,7 +68,25 @@ fun NovelChatNavGraph() {
     val worldbookVM: WorldbookViewModel = viewModel()
     val characterVM: CharacterViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = Routes.WELCOME, modifier = Modifier.fillMaxSize()) {
+    NavHost(
+        navController = navController,
+        startDestination = Routes.WELCOME,
+        modifier = Modifier.fillMaxSize().background(DarkBg),
+        enterTransition = {
+            fadeIn(animationSpec = tween(220)) +
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(240)) { it / 10 }
+        },
+        exitTransition = {
+            fadeOut(animationSpec = tween(180))
+        },
+        popEnterTransition = {
+            fadeIn(animationSpec = tween(200))
+        },
+        popExitTransition = {
+            fadeOut(animationSpec = tween(180)) +
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(220)) { it / 10 }
+        }
+    ) {
         composable(Routes.WELCOME) {
             val isCfg by welcomeVM.isApiConfigured.collectAsState()
             LaunchedEffect(isCfg) {

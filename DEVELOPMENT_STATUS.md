@@ -1,6 +1,6 @@
 # NovelChat 开发状态与设计方案
 
-更新时间：2026-08-01
+更新时间：2026-11-26
 
 ## 目标
 
@@ -13,7 +13,7 @@
 - 存储：JSON 文件系统作为 RPG 主存储，DataStore 保存 API 配置；不引入 Room。
 - 存档恢复：关键 JSON 严格解析，缺失文件才允许使用初始化值；损坏文件保留现场并在故事库显示警告，禁止静默覆盖。
 - 存档发布：新故事先带 `.creating` 标记写入隔离目录，世界、主角和开局状态全部落盘后才移除标记并写入故事索引；中断产生的半成品不会出现在故事库。
-- 核心引擎：`RpgGameEngine` 顺序执行剧情生成、正文质量复核、任务分配、角色状态更新与原子持久化。
+- 核心引擎：二代双轨异步引擎（`StorySessionManager` / `RoundOrchestrator` / `NarratorAgent` / `StateKeeperAgent` / `SyncQueue` / `MemoryManager`）作为唯一引擎运行；旧版 V1 `RpgGameEngine` 与切换开关已全面移除，同时保留旧存档与 `state_sync_pending_from_round` 恢复兼容。
 - 叙事契约：模型必须返回动作覆盖、主动续写、结尾场景和首次登场人物锚点；单轮质量修订只处理关键动作遗漏、主角自主权、角色与场景结构等问题。1000-1500 字是首次生成目标，不是硬性验收条件，纯字数偏差不再触发第二次补写，也不阻断后续状态同步。
 - 状态一致性：正文落盘后立即写入待同步标记，任务分配成功并完成全部状态写入后才清除；进程中断时可从已保存正文恢复。
 - 角色连续性：在场人物必须能解析到既有角色卡或本轮新建角色；身份泛称不能成为悬空角色引用。
@@ -312,6 +312,28 @@
 - “字数不足 + 结构问题”只修复动作顺序、段落、人物和现场等真正会破坏剧情的问题；结构修复完成后不会再追加一次纯字数修订。
 - 首稿目标调整为 1200-1400 个字符，验收范围仍为 1000-1500；剧情与修订输出预算由 4800 提升到 5600 token，为结构化字段留出余量。
 - `ending_scene.present_characters` 在质量校验前确定性移除主角姓名、“主角”和重复项，修复主角“沈默”被当作未确认 NPC 而连续重试的问题。
+
+## 2026-11-26 版本 1.1.0（Engine V2 并行共治架构）
+
+- 新增 Engine V2 并与 V1 并存切换（API 设置页可选「V2 极速拟人引擎」，默认仍保持 V1 直到完成真机实测门禁 T4.1）：
+  - 前台叙事改由 `NarratorAgent` + `NarrativeTextCleaner` + `NarrativeGuard` + `RoundOrchestrator` 纯正文流式直出，取消内联 JSON 包装与逐项清单；正文落盘即释放输入栏，不再阻塞下一轮。
+  - 后台 `SyncQueue` 并发执行 `StateKeeperAgent`（结构化增量状态 + 行动建议）与 `MemoryManager`（10 轮章节摘要 + 60 轮总览），并通过 `StoryRepository` 单故事互斥锁与 `RoundCommitJournal` 两阶段日志原子提交；跨轮异步重叠时自动写入并回补 `provisional` 检查点，重新生成自动取消 `>= turn` 的未提交同步并等待前序同步完成。
+  - 提示词装配 `ContextAssembler` 区分稳定前缀与动态尾部，支持 OpenAI Prompt Caching 与 `cached_tokens` / TTFT / 阻塞耗时指标采集（`LlmScheduler`、`LlmMetrics`）。
+  - 新增故事级「叙事设置」（视角、篇幅覆盖、创造力、文风示例）、NPC「编辑口吻」（说话风格与最多 5 句代表台词）及 Debug/QA「性能调试」面板；`CharacterViewModel`、`WorldbookViewModel` 和 `CharacterConfirmViewModel` 的读写统一纳入 `StoryRepository` 锁保护。
+  - 验证结果：438 项 JVM 单元测试全部通过（0 失败、0 跳过），`lintDebug`、`compileDebugAndroidTestKotlin`、`assembleDebug` 和 `assembleQa` 通过；Android 模拟器（`emulator-5554`）执行 13 项仪器测试（11 项通过、2 项需真实 API 的评测用例按条件跳过），并完成 API 配置页 V2 开关与 8 环节路由对话框无裁切、无崩溃验证；尚待配置真实 API Key 后在设备运行 `EngineEvalRunnerInstrumentedTest` V1/V2 实测对比（T4.1）。
+
+## 2026-11-26 版本 2.0.0（纯 Engine V2 全面转正 + 小米 17 Pro 全面界面与数据体检修复）
+
+- 全面移除旧版 V1 引擎（`RpgGameEngine`、`RpgPromptBuilder`、`GameEvent` 及 10 个 V1 专用策略模块与测试），移除设置页 V1/V2 切换器与旧版路由条目；高级调用路由收敛为 5 个活跃阶段（故事识别、角色设定、剧情正文、状态同步、章节浓缩），并保留对历史 `task_assignment` 路由及 V1 存档的向后兼容。
+- 站在 Google 产品经理与 Material 3 Expressive 视角从零重塑全站 UI（`Color.kt`、`Type.kt`、`Theme.kt`、`Components.kt` 及全部 14 个页面/抽屉）：采用「深夜书房」暗曜墨底（`#0E1014`）+ 五级 Tonality 层次 + 香槟暖金/静谧玉青克制点缀 + 暖象牙 `16sp/27sp` 文学阅读排版、一体化场景状态胶囊、Gemini 风格胶囊输入栏、世界书分类筛选胶囊与 Material 3 `ModalBottomSheet` 交互抽屉。
+- 新增面向中国大陆版 **小米平板 6 Pro**（11 英寸 `2880×1800 @ 360dpi`、横屏 `1280×800dp` / 竖屏 `800×1280dp`、HyperOS 分屏/小窗与外接磁吸键盘）的完整 Material 3 自适应布局体系（`AdaptiveLayout.kt`、`AndroidManifest.xml` 无重建旋转与多窗口支持）：横屏聊天页自动启用「左侧常驻剧情侧边栏 + 右侧居中 17sp/29sp 沉浸阅读区」双栏架构并支持键盘 Enter/Ctrl+Enter 发送；故事库、预设、角色列表与世界书自动切换 2～3 列多栏网格；欢迎页、API 配置与角色详情页在平板横屏自动切换双栏排版。
+- 面向中国大陆版小米 17 Pro（6.3 英寸 `1220×2656` @ `480 dpi`、居中挖孔、手势导航条、HyperOS 3 深色模式、中文拼音输入法）完成全页面排查与逐项修复：
+  - 深色主题禁用系统强行反色（`forceDarkAllowed=false`），配置 `shortEdges` 挖孔全屏延伸、`isNavigationBarContrastEnforced=false`，为欢迎页、引导弹窗、预设页、自定义开局页、角色列表、故事库与世界书页补齐状态栏/手势条/输入法安全间距。
+  - 修复中文拼音输入法向 API 地址栏键入全角 `：`/`／`/`．` 导致的 URL 校验失败，并为 URL 栏启用 `KeyboardType.Uri` 与关闭自动纠错。
+  - 聊天页底部回到底部按钮改为半透明紧凑胶囊并加大正文底部留白，消除对最后两行正文的遮挡；主角/NPC 详情弹窗与角色详情页优化长文本块级布局、隐藏空白“未知”字段、补齐底部留白并修正风险/警觉度/能力/等级/年龄的数值格式化与语义配色（消除 `2/9999`、`29/120`、`55/100%` 与 `风险 0/100` 标红问题）。
+  - 修复世界书页右下角 `+` 悬浮按钮遮挡底部卡片、美化状态标签样式；修复 `StateDeltaApplier` 增量同步覆写既有世界书详情的问题，改为保留原设定并追加新事实。
+  - 修复高级 JSON 导入链路（`JsonResponseParser` / `StoryParseContentPolicy` / `StoryConfirmScreen`）遗漏 `sample_dialogues` 的问题，使 NPC 代表台词完整进入角色详情与口吻编辑器。
+  - 优化故事库导入卡片副标题为“世界名 · 主角身份”，统一预设页“阶层 E/D/C”中文文案，提升角色确认页禁用按钮对比度。
 
 ## 当前限制
 

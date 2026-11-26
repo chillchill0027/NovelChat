@@ -32,8 +32,15 @@ data class CharacterCard(
     @SerializedName("custom_attributes") val customAttributes: Map<String, String> = emptyMap(),
     @SerializedName("relationships") val relationships: Map<String, Relationship> = emptyMap(),
     @SerializedName("inventory") val inventory: List<InventoryItem> = emptyList(),
+    @SerializedName("memories") val memories: List<MemoryNote> = emptyList(),
 
     @SerializedName("created_by") val createdBy: String = "ai",
     @SerializedName("created_at") val createdAt: String = "",
     @SerializedName("last_modified") val lastModified: String = ""
+)
+
+data class MemoryNote(
+    @SerializedName("turn") val turn: Int = 0,
+    @SerializedName("text") val text: String = "",
+    @SerializedName("weight") val weight: Int = 1
 )

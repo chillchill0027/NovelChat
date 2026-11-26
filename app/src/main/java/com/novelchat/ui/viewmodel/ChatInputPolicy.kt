@@ -13,14 +13,15 @@ object ChatInputPolicy {
     fun validate(
         content: String,
         isReady: Boolean,
-        pendingSyncRound: Int? = null
+        pendingSyncRound: Int? = null,
+        enforcePendingSyncBlock: Boolean = true
     ): ChatInputValidation {
         val action = content.trim()
         if (action.isBlank()) return ChatInputValidation()
         if (!isReady) {
             return ChatInputValidation(errorMessage = "故事尚未加载完成，请稍候再发送。")
         }
-        if (pendingSyncRound != null) {
+        if (enforcePendingSyncBlock && pendingSyncRound != null) {
             return ChatInputValidation(
                 errorMessage = "第${pendingSyncRound}轮状态仍待补同步，请先完成同步再继续剧情。"
             )

@@ -3,10 +3,15 @@ package com.novelchat
 import android.app.Application
 import android.util.Log
 import com.novelchat.data.remote.AiService
+import com.novelchat.data.remote.llm.LlmClient
+import com.novelchat.data.remote.llm.LlmMetrics
+import com.novelchat.data.remote.llm.LlmScheduler
+import com.novelchat.data.remote.llm.OpenAiCompatibleLlmClient
+import com.novelchat.data.repo.StoryRepository
 import com.novelchat.data.storage.FileStorageManager
 import com.novelchat.data.storage.ConversationIndexStore
 import com.novelchat.data.storage.SettingsRepository
-import com.novelchat.domain.engine.RpgGameEngine
+import com.novelchat.session.StorySessionManager
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +28,15 @@ class NovelChatApp : Application() {
         private set
     lateinit var conversationIndexStore: ConversationIndexStore
         private set
-    lateinit var gameEngine: RpgGameEngine
+    lateinit var storyRepository: StoryRepository
+        private set
+    lateinit var llmScheduler: LlmScheduler
+        private set
+    lateinit var llmMetrics: LlmMetrics
+        private set
+    lateinit var llmClient: LlmClient
+        private set
+    lateinit var storySessionManager: StorySessionManager
         private set
     override fun onCreate() {
         super.onCreate()
@@ -38,6 +51,16 @@ class NovelChatApp : Application() {
         aiService = AiService(this)
         fileStorage = FileStorageManager(this)
         conversationIndexStore = ConversationIndexStore(File(filesDir, "conversations_index.json"))
-        gameEngine = RpgGameEngine(aiService, fileStorage)
+        storyRepository = StoryRepository(fileStorage)
+        llmScheduler = LlmScheduler()
+        llmMetrics = LlmMetrics()
+        llmClient = OpenAiCompatibleLlmClient(aiService, llmScheduler, llmMetrics)
+        storySessionManager = StorySessionManager(
+            applicationScope = applicationScope,
+            aiService = aiService,
+            llmClient = llmClient,
+            storyRepository = storyRepository,
+            llmMetrics = llmMetrics
+        )
     }
 }

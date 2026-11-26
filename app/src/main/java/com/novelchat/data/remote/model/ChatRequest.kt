@@ -11,7 +11,9 @@ data class ChatRequest(
     @SerializedName("max_tokens") val maxTokens: Int? = null,
     @SerializedName("response_format") val responseFormat: ResponseFormat? = null,
     @SerializedName("reasoning_effort") val reasoningEffort: String? = null,
-    @SerializedName("thinking") val thinking: ThinkingConfig? = null
+    @SerializedName("thinking") val thinking: ThinkingConfig? = null,
+    @SerializedName("presence_penalty") val presencePenalty: Float? = null,
+    @SerializedName("frequency_penalty") val frequencyPenalty: Float? = null
 )
 
 data class ResponseFormat(

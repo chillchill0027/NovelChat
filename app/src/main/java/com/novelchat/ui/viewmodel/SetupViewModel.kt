@@ -31,6 +31,8 @@ data class SetupState(
     val profileName: String = "",
     val profiles: List<ApiProfile> = emptyList(),
     val apiStageRoutes: ApiStageRoutes = ApiStageRoutes(),
+    val narrationLength: LengthPreference = LengthPreference.STANDARD,
+    val narrationCreativity: CreativityLevel = CreativityLevel.BALANCED,
     val isTesting: Boolean = false,
     val isContinuing: Boolean = false,
     val isProfileMutating: Boolean = false,
@@ -67,6 +69,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = _state.value.copy(
                     profiles = settingsRepository.getApiProfiles(),
                     apiStageRoutes = settingsRepository.getApiStageRoutes(),
+                    narrationLength = settingsRepository.narrationLength.first(),
+                    narrationCreativity = settingsRepository.narrationCreativity.first(),
                     profileName = settingsRepository.getCurrentProfileName(),
                     apiUrl = SetupFlowPolicy.normalizeApiUrlDraft(settingsRepository.apiBaseUrl.first()),
                     apiKey = SetupFlowPolicy.normalizeApiKeyDraft(settingsRepository.apiKey.first()),
@@ -180,6 +184,20 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _state.value = _state.value.copy(isProfileMutating = false)
             }
+        }
+    }
+
+    fun setNarrationLength(length: LengthPreference) {
+        _state.value = _state.value.copy(narrationLength = length)
+        viewModelScope.launch {
+            settingsRepository.saveNarrationLength(length)
+        }
+    }
+
+    fun setNarrationCreativity(creativity: CreativityLevel) {
+        _state.value = _state.value.copy(narrationCreativity = creativity)
+        viewModelScope.launch {
+            settingsRepository.saveNarrationCreativity(creativity)
         }
     }
 
@@ -540,10 +558,15 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 fileStorage.completeConversationStorage(characterId)
 
+                val conciseDesc = listOf(ws.name, p.class_)
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .joinToString(" · ")
+                    .ifBlank { ws.description.ifBlank { _state.value.storyText.take(100) } }
                 saveConversationIndex(ConversationEntry(
                     id = characterId,
                     characterName = playerName.ifBlank { ws.name.ifBlank { "新故事" } },
-                    characterDesc = ws.description.ifBlank { _state.value.storyText.take(100) },
+                    characterDesc = conciseDesc,
                     type = "story",
                     createdAt = createdAt,
                     lastMessageAt = createdAt,

@@ -124,6 +124,19 @@ class AdvancedStoryImportPolicyTest {
         assertEquals(8, result.worldbook.size)
     }
 
+    @Test
+    fun v2LiveDebugStory_preservesNpcSampleDialogues() {
+        val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
+            .map { root -> File(root, "docs/v2_live_debug_story_v1.json") }
+            .first(File::isFile)
+
+        val result = AdvancedStoryImportPolicy.parse(example.readText())
+        val xuTang = result.npcs.first { it.name == "许棠" }
+
+        assertEquals(3, xuTang.lore.sampleDialogues.size)
+        assertTrue(xuTang.lore.sampleDialogues.first().contains("沈师傅"))
+    }
+
     private fun assertFailureContains(raw: String, expected: String) {
         try {
             AdvancedStoryImportPolicy.parse(raw)

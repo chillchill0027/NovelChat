@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 class WorldbookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as NovelChatApp
-    private val fileStorage = app.fileStorage
+    private val repo = app.storyRepository
 
     private val _entries = MutableStateFlow<List<WorldbookEntry>>(emptyList())
     val entries: StateFlow<List<WorldbookEntry>> = _entries.asStateFlow()
@@ -61,7 +61,9 @@ class WorldbookViewModel(application: Application) : AndroidViewModel(applicatio
         val generation = ++loadGeneration
         loadJob = viewModelScope.launch {
             try {
-                val loaded = fileStorage.loadAllWorldbookEntries(characterId)
+                val loaded = repo.edit(characterId) { storage ->
+                    storage.loadAllWorldbookEntries(characterId)
+                }
                 if (this@WorldbookViewModel.characterId == characterId && loadGeneration == generation) {
                     _entries.value = loaded
                 }
@@ -121,22 +123,24 @@ class WorldbookViewModel(application: Application) : AndroidViewModel(applicatio
         val generation = ++mutationGeneration
         mutationJob = viewModelScope.launch {
             try {
-                val now = fileStorage.getCurrentTimeString()
-                val entry = (existing ?: WorldbookEntry(
-                    id = WorldbookEntryInputPolicy.newEntryId(),
-                    createdBy = "user",
-                    createdAt = now
-                )).copy(
-                    type = normalized.type,
-                    name = normalized.name,
-                    description = normalized.description,
-                    keywords = normalized.keywords,
-                    status = normalized.status,
-                    isActive = isActive,
-                    lastModified = now
-                )
-                fileStorage.saveWorldbookEntry(targetCharacterId, entry)
-                val loaded = fileStorage.loadAllWorldbookEntries(targetCharacterId)
+                val loaded = repo.edit(targetCharacterId) { storage ->
+                    val now = storage.getCurrentTimeString()
+                    val entry = (existing ?: WorldbookEntry(
+                        id = WorldbookEntryInputPolicy.newEntryId(),
+                        createdBy = "user",
+                        createdAt = now
+                    )).copy(
+                        type = normalized.type,
+                        name = normalized.name,
+                        description = normalized.description,
+                        keywords = normalized.keywords,
+                        status = normalized.status,
+                        isActive = isActive,
+                        lastModified = now
+                    )
+                    storage.saveWorldbookEntry(targetCharacterId, entry)
+                    storage.loadAllWorldbookEntries(targetCharacterId)
+                }
                 if (this@WorldbookViewModel.characterId == targetCharacterId && mutationGeneration == generation) {
                     _entries.value = loaded
                     onSaved()
@@ -162,8 +166,10 @@ class WorldbookViewModel(application: Application) : AndroidViewModel(applicatio
         val generation = ++mutationGeneration
         mutationJob = viewModelScope.launch {
             try {
-                fileStorage.deleteWorldbookEntry(targetCharacterId, entry.id)
-                val loaded = fileStorage.loadAllWorldbookEntries(targetCharacterId)
+                val loaded = repo.edit(targetCharacterId) { storage ->
+                    storage.deleteWorldbookEntry(targetCharacterId, entry.id)
+                    storage.loadAllWorldbookEntries(targetCharacterId)
+                }
                 if (this@WorldbookViewModel.characterId == targetCharacterId && mutationGeneration == generation) {
                     _entries.value = loaded
                     onDeleted()

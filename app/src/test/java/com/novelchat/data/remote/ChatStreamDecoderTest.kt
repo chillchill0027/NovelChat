@@ -219,6 +219,34 @@ class ChatStreamDecoderTest {
         }
     }
 
+    @Test
+    fun decoder_extractsUsageFromEmptyChoicesChunkAndAllowsV2LengthCompletion() {
+        val events = decode(
+            """data: {"choices":[{"delta":{"content":"正文片段"}}]}""",
+            "",
+            """data: {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165,"prompt_cache_hit_tokens":96}}""",
+            "",
+            "data: [DONE]",
+            ""
+        )
+
+        val usage = events.firstNotNullOfOrNull { it.usage }
+        assertEquals(120, usage?.promptTokens)
+        assertEquals(45, usage?.completionTokens)
+        assertEquals(96, usage?.cachedTokens())
+
+        ChatStreamCompletionPolicy.requireComplete(
+            receivedContent = true,
+            sawDone = true,
+            finishReason = "length",
+            malformed = false,
+            serverError = false,
+            nonStreamingResponse = false,
+            jsonMode = false,
+            throwOnLength = false
+        )
+    }
+
     private fun decode(vararg lines: String): List<ChatStreamEvent> {
         val decoder = ChatStreamDecoder()
         val events = mutableListOf<ChatStreamEvent>()

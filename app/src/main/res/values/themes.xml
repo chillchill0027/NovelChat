@@ -1,8 +1,11 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.NovelChat" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!-- 深色阅读主题：避免 HyperOS/Android 浅色模式下冷启动白屏闪烁与强制反色 -->
+    <style name="Base.Theme.NovelChat" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">#0E1014</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
     </style>
 
     <style name="Theme.NovelChat" parent="Base.Theme.NovelChat" />

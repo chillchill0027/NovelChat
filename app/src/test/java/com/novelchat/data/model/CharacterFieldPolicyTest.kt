@@ -74,4 +74,24 @@ class CharacterFieldPolicyTest {
         assertEquals("照明术、护盾术", normalized["known_spells"])
         assertTrue(CharacterFieldPolicy.usesCustomStorage("arcane_affinity", CharacterFieldDefinition.TARGET_PLAYER))
     }
+
+    @Test
+    fun formatValue_avoidsAbsurdDenominatorsForAgeLevelAndPercentage() {
+        val ageField = CharacterFieldPolicy.definitionFor(emptyList(), "age")!!
+        val levelField = CharacterFieldPolicy.definitionFor(emptyList(), "level")!!
+        val alertField = CharacterFieldDefinition(
+            key = "alertness",
+            label = "警觉度",
+            valueType = CharacterFieldDefinition.TYPE_NUMBER,
+            minValue = 0,
+            maxValue = 100,
+            unit = "%"
+        )
+
+        assertEquals("29岁", CharacterFieldPolicy.formatValue(ageField, "29", compact = false))
+        assertEquals("29岁", CharacterFieldPolicy.formatValue(ageField, "29", compact = true))
+        assertEquals("2", CharacterFieldPolicy.formatValue(levelField, "2", compact = false))
+        assertEquals("55%", CharacterFieldPolicy.formatValue(alertField, "55", compact = false))
+        assertEquals("55%", CharacterFieldPolicy.formatValue(alertField, "55", compact = true))
+    }
 }

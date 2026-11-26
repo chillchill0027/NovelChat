@@ -3,6 +3,8 @@ package com.novelchat.data.remote
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.novelchat.data.remote.model.PromptTokensDetails
+import com.novelchat.data.remote.model.Usage
 import java.io.IOException
 
 internal data class ChatStreamEvent(
@@ -11,7 +13,8 @@ internal data class ChatStreamEvent(
     val done: Boolean = false,
     val malformed: Boolean = false,
     val serverError: Boolean = false,
-    val nonStreamingResponse: Boolean = false
+    val nonStreamingResponse: Boolean = false,
+    val usage: Usage? = null
 )
 
 /**
@@ -151,12 +154,27 @@ internal class ChatStreamDecoder {
         }
         if (!root.isJsonObject) return emptyList()
 
-        val choicesNode = root.asJsonObject.get("choices") ?: return emptyList()
+        val rootObj = root.asJsonObject
+        val usage = rootObj.objectOrNull("usage")?.toUsage()
+        val choicesNode = rootObj.get("choices")
+        if (choicesNode == null) {
+            return if (usage != null) {
+                listOf(ChatStreamEvent(usage = usage, nonStreamingResponse = nonStreamingResponse))
+            } else {
+                emptyList()
+            }
+        }
         if (!choicesNode.isJsonArray) {
             return listOf(ChatStreamEvent(malformed = true))
         }
         val choices = choicesNode.asJsonArray
-        if (choices.isEmpty) return emptyList()
+        if (choices.isEmpty) {
+            return if (usage != null) {
+                listOf(ChatStreamEvent(usage = usage, nonStreamingResponse = nonStreamingResponse))
+            } else {
+                emptyList()
+            }
+        }
         val firstChoice = choices.first()
         if (!firstChoice.isJsonObject) {
             return listOf(ChatStreamEvent(malformed = true))
@@ -167,12 +185,13 @@ internal class ChatStreamDecoder {
             ?: choice.objectOrNull("message")?.get("content")
         val content = contentNode.extractText().takeIf { it.isNotEmpty() }
 
-        return if (content != null || finishReason != null) {
+        return if (content != null || finishReason != null || usage != null) {
             listOf(
                 ChatStreamEvent(
                     content = content,
                     finishReason = finishReason,
-                    nonStreamingResponse = nonStreamingResponse
+                    nonStreamingResponse = nonStreamingResponse,
+                    usage = usage
                 )
             )
         } else {
@@ -201,9 +220,10 @@ internal object ChatStreamCompletionPolicy {
         malformed: Boolean,
         serverError: Boolean,
         nonStreamingResponse: Boolean,
-        jsonMode: Boolean
+        jsonMode: Boolean,
+        throwOnLength: Boolean = true
     ) {
-        if (finishReason == "length") {
+        if (throwOnLength && finishReason == "length") {
             val detail = if (jsonMode) "，JSON 可能不完整" else ""
             throw CompletionLengthException("AI 输出达到长度上限$detail")
         }
@@ -237,6 +257,24 @@ private fun JsonObject.objectOrNull(name: String): JsonObject? {
 private fun JsonObject.stringOrNull(name: String): String? {
     val value = get(name) ?: return null
     return value.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+}
+
+private fun JsonObject.intOrNull(name: String): Int? {
+    val value = get(name) ?: return null
+    return value.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
+}
+
+private fun JsonObject.toUsage(): Usage {
+    val details = objectOrNull("prompt_tokens_details")?.let { detailObj ->
+        PromptTokensDetails(cachedTokens = detailObj.intOrNull("cached_tokens"))
+    }
+    return Usage(
+        promptTokens = intOrNull("prompt_tokens") ?: 0,
+        completionTokens = intOrNull("completion_tokens") ?: 0,
+        totalTokens = intOrNull("total_tokens") ?: 0,
+        promptCacheHitTokens = intOrNull("prompt_cache_hit_tokens"),
+        promptTokensDetails = details
+    )
 }
 
 private fun JsonElement?.extractText(): String {

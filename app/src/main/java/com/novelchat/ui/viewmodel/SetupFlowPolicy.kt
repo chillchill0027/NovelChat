@@ -21,7 +21,8 @@ object SetupFlowPolicy {
         return !ApiEndpointPolicy.isLocalEndpoint(apiUrl)
     }
 
-    fun normalizeApiUrlDraft(value: String): String = value.take(ApiEndpointPolicy.MAX_BASE_URL_LENGTH)
+    fun normalizeApiUrlDraft(value: String): String =
+        ApiEndpointPolicy.sanitizeUrlInput(value).take(ApiEndpointPolicy.MAX_BASE_URL_LENGTH)
 
     fun normalizeApiKeyDraft(value: String): String = value.take(ApiEndpointPolicy.MAX_API_KEY_LENGTH)
 

@@ -284,6 +284,15 @@ object CharacterFieldPolicy {
         if (field.valueType != CharacterFieldDefinition.TYPE_NUMBER) {
             return value + field.unit
         }
+        if (field.key == "age") {
+            return if (field.unit.isNotBlank()) value + field.unit else "${value}岁"
+        }
+        if (field.key == "level" || field.maxValue > 1_000) {
+            return value + field.unit
+        }
+        if (field.unit == "%") {
+            return "$value%"
+        }
         return if (compact) {
             value + field.unit
         } else {

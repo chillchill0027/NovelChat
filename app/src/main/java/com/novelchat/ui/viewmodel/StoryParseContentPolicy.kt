@@ -185,6 +185,7 @@ object StoryParseContentPolicy {
             secrets = loreList(lore.secrets),
             habits = loreList(lore.habits),
             speechStyle = summary(lore.speechStyle),
+            sampleDialogues = loreList(lore.sampleDialogues).take(5),
             abilities = loreList(lore.abilities),
             knowledge = loreList(lore.knowledge),
             boundaries = loreList(lore.boundaries),

@@ -80,4 +80,27 @@ class ApiConnectionRoutingPolicyTest {
             ApiConnectionRoutingPolicy.resolve(default, listOf(qwen), routes, null)
         )
     }
+
+    @Test
+    fun resolve_v2StateKeeperAndSummarizerFallBackAlongChain() {
+        val taskRoutes = ApiStageRoutes().assign(AiCallStage.TASK_ASSIGNMENT, stateModel.name)
+        assertEquals(
+            stateModel,
+            ApiConnectionRoutingPolicy.resolve(default, listOf(qwen, stateModel), taskRoutes, AiCallStage.STATE_KEEPER)
+        )
+        assertEquals(
+            stateModel,
+            ApiConnectionRoutingPolicy.resolve(default, listOf(qwen, stateModel), taskRoutes, AiCallStage.SUMMARIZER)
+        )
+
+        val keeperRoutes = taskRoutes.assign(AiCallStage.STATE_KEEPER, qwen.name)
+        assertEquals(
+            qwen,
+            ApiConnectionRoutingPolicy.resolve(default, listOf(qwen, stateModel), keeperRoutes, AiCallStage.STATE_KEEPER)
+        )
+        assertEquals(
+            qwen,
+            ApiConnectionRoutingPolicy.resolve(default, listOf(qwen, stateModel), keeperRoutes, AiCallStage.SUMMARIZER)
+        )
+    }
 }
