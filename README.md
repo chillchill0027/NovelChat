@@ -52,10 +52,8 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 高级接入支持从文件、剪贴板或内置模板导入版本化 JSON。世界规则、角色长期动机、初始身心状态、物品、世界书关系和开局现场都会结构化保存。`world_setting.character_fields` 可定义整张角色卡：内置字段可重命名、改范围和显示位置，也可新增任意字段；初始值写入 `custom_attributes`，后续按 `dynamic`、`event`、`manual` 规则随剧情刷新。接入材料：
 
 - [`docs/ADVANCED_STORY_IMPORT_GUIDE.md`](docs/ADVANCED_STORY_IMPORT_GUIDE.md)：完整操作与字段指南
-- [`docs/advanced_story_import_v1.example.json`](docs/advanced_story_import_v1.example.json)：可直接导入的完整示例
-- [`docs/advanced_story_import_magic_academy.example.json`](docs/advanced_story_import_magic_academy.example.json)：把体力、风险和世界专属指标改造成魔法系统的完整示例
+- [`docs/advanced_story_import_shendiao_v1.json`](docs/advanced_story_import_shendiao_v1.json)：唯一内置默认史诗剧本《神雕侠侣 · 终南烟雨》（扮演杨过，含 24 位经典实名角色、42 条世界书与「三度引流 + 自创江湖 + 八大年表自演」机制）
 - [`docs/advanced_story_import_v1.schema.json`](docs/advanced_story_import_v1.schema.json)：机器可读 JSON Schema
-- [`docs/MAGIC_ACADEMY_QA_REPORT.md`](docs/MAGIC_ACADEMY_QA_REPORT.md)：高级魔法故事十轮 DeepSeek 真机验证与状态曲线
 
 默认故事方向：
 

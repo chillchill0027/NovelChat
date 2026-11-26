@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createDefaultStory } from './domain/defaultStories';
 import { requestPersistentStorage } from './storage/db';
 import { defaultSettings, loadSettings } from './storage/settingsStore';
-import { getStory, listStories } from './storage/storyRepository';
+import { getStory, listStories, saveStory } from './storage/storyRepository';
 import type { AppSettings, StoryMeta, StoryRecord } from './types/models';
 import { ApiSetupScreen } from './ui/screens/ApiSetupScreen';
 import { CharacterListScreen } from './ui/screens/CharacterListScreen';
 import { ChatScreen } from './ui/screens/ChatScreen';
 import { MainLobbyScreen } from './ui/screens/MainLobbyScreen';
-import { PresetSelectScreen } from './ui/screens/PresetSelectScreen';
 import { StoryImportScreen } from './ui/screens/StoryImportScreen';
 import { WelcomeScreen } from './ui/screens/WelcomeScreen';
 import { WorldbookScreen } from './ui/screens/WorldbookScreen';
@@ -16,7 +16,6 @@ type Route =
   | { name: 'welcome' }
   | { name: 'setup'; returnTo: 'lobby' | 'chat'; storyId?: string }
   | { name: 'lobby' }
-  | { name: 'presets' }
   | { name: 'import' }
   | { name: 'chat'; storyId: string }
   | { name: 'worldbook'; storyId: string }
@@ -33,8 +32,6 @@ function parseHashRoute(hash: string): Route | null {
       return { name: 'setup', returnTo: 'lobby' };
     case 'lobby':
       return { name: 'lobby' };
-    case 'presets':
-      return { name: 'presets' };
     case 'import':
       return { name: 'import' };
     case 'chat':
@@ -64,8 +61,6 @@ function toHash(route: Route): string {
       return '#/setup';
     case 'lobby':
       return '#/lobby';
-    case 'presets':
-      return '#/presets';
     case 'import':
       return '#/import';
     case 'chat':
@@ -233,20 +228,16 @@ export function App() {
         modelLabel={settings.model || '未配置模型'}
         onRefresh={refreshStories}
         onOpenStory={(id) => void handleOpenStory(id)}
-        onModernStart={() => navigate({ name: 'presets' })}
+        onDefaultStart={async () => {
+          const rec = createDefaultStory();
+          await saveStory(rec);
+          await refreshStories();
+          setActiveRecord(rec);
+          navigate({ name: 'chat', storyId: rec.id });
+        }}
         onImportStory={() => navigate({ name: 'import' })}
         onOpenSettings={() => navigate({ name: 'setup', returnTo: 'lobby' })}
         onToast={showToast}
-      />
-    );
-  } else if (route.name === 'presets') {
-    screen = (
-      <PresetSelectScreen
-        onBack={() => navigate({ name: 'lobby' })}
-        onCreated={async (id) => {
-          await refreshStories();
-          await handleOpenStory(id);
-        }}
       />
     );
   } else if (route.name === 'import') {

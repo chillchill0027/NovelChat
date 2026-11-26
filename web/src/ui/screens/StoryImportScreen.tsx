@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   BUILTIN_ADVANCED_TEMPLATES,
-  DEFAULT_MODERN_STORY_TEXT,
+  DEFAULT_STORY_TEXT,
 } from '../../domain/defaultStories';
 import {
   buildStoryRecordFromParsed,
@@ -30,7 +30,7 @@ interface StoryImportScreenProps {
 export function StoryImportScreen({ settings, onBack, onCreated }: StoryImportScreenProps) {
   const [mode, setMode] = useState<'advanced' | 'ai'>('advanced');
   const [jsonDraft, setJsonDraft] = useState(BUILTIN_ADVANCED_TEMPLATES[0].json);
-  const [textDraft, setTextDraft] = useState(DEFAULT_MODERN_STORY_TEXT);
+  const [textDraft, setTextDraft] = useState(DEFAULT_STORY_TEXT);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedStoryBundle | null>(null);

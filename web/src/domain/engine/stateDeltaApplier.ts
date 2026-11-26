@@ -18,7 +18,8 @@ import { appliesTo, effectiveDefinitions, sanitizeFieldValue } from '../characte
 
 const GOAL_NOISE = /[\s，,。\.！!？\?；;：:“”"'（）()\[\]【】—\-…]/g;
 const IMPORTANT_MEMORY_RE = /承诺|约定|答应|秘密|偷|背叛|冲突|吵|交易|借|欠|钥匙|合同|誓约|警告|威胁|交付|面试/;
-const GENERIC_NPC_RE = /^(主角|玩家|陌生人|路人|邻居|店员|服务员|老板|男子|女子|男人|女人)[A-Z0-9甲乙丙丁一二三四]?$/;
+const GENERIC_NPC_RE =
+  /^(?:主角|玩家|陌生人|路人|邻居|店员|服务员|老板|男子|女子|男人|女人|账房先生|店小二|掌柜|车夫|村妇|樵夫|渔夫|道士|道人|行商|侠客)[A-Z0-9甲乙丙丁一二三四]?$|(?:老汉|汉子|商人|江湖客|村妇|小二|道士|道人|书生|商旅)$/;
 const MAX_MEMORIES = 30;
 const MAX_PENDING_EVENTS = 8;
 const MAX_DELTA_PER_ROUND = 15;

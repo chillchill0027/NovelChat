@@ -90,54 +90,6 @@ class AdvancedStoryImportPolicyTest {
     }
 
     @Test
-    fun documentedExample_isAcceptedByTheProductionImporter() {
-        val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
-            .map { root -> File(root, "docs/advanced_story_import_v1.example.json") }
-            .first(File::isFile)
-
-        val result = AdvancedStoryImportPolicy.parse(example.readText())
-
-        assertEquals("海临市", result.worldSetting.name)
-        assertEquals("林克", result.player.name)
-        assertEquals("精力", result.worldSetting.characterFields.first { it.key == "stamina" }.label)
-        assertEquals("44", result.npcs.single().customAttributes["life_stability"])
-        assertEquals("顾宁", result.npcs.single().name)
-        assertEquals(3, result.worldbook.size)
-    }
-
-    @Test
-    fun magicAcademyExample_exercisesCustomDynamicAndEventFields() {
-        val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
-            .map { root -> File(root, "docs/advanced_story_import_magic_academy.example.json") }
-            .first(File::isFile)
-
-        val result = AdvancedStoryImportPolicy.parse(example.readText())
-
-        assertEquals("雾海群岛与弦月秘仪学院", result.worldSetting.name)
-        assertEquals("祁越", result.player.name)
-        assertEquals("魔力储备", result.worldSetting.characterFields.first { it.key == "stamina" }.label)
-        assertEquals("dynamic", result.worldSetting.characterFields.first { it.key == "spell_control" }.updateMode)
-        assertEquals("event", result.worldSetting.characterFields.first { it.key == "clue_depth" }.updateMode)
-        assertEquals("66", result.player.customAttributes["spell_control"])
-        assertEquals(listOf("迟霜", "闻岚"), result.opening.activeCharacters)
-        assertEquals(3, result.npcs.size)
-        assertEquals(8, result.worldbook.size)
-    }
-
-    @Test
-    fun v2LiveDebugStory_preservesNpcSampleDialogues() {
-        val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
-            .map { root -> File(root, "docs/v2_live_debug_story_v1.json") }
-            .first(File::isFile)
-
-        val result = AdvancedStoryImportPolicy.parse(example.readText())
-        val xuTang = result.npcs.first { it.name == "许棠" }
-
-        assertEquals(3, xuTang.lore.sampleDialogues.size)
-        assertTrue(xuTang.lore.sampleDialogues.first().contains("沈师傅"))
-    }
-
-    @Test
     fun shendiaoExample_validatesFullWorldAndDestinyMechanics() {
         val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
             .map { root -> File(root, "docs/advanced_story_import_shendiao_v1.json") }

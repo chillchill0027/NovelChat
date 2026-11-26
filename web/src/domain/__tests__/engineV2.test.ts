@@ -5,13 +5,13 @@ import {
   validateApiConfig,
 } from '../apiEndpoint';
 import { formatFieldValue, playerPrimaryFields } from '../characterFields';
-import { BUILTIN_ADVANCED_TEMPLATES, CHARACTER_PRESETS, createStoryFromPreset } from '../defaultStories';
+import { BUILTIN_ADVANCED_TEMPLATES, createDefaultStory } from '../defaultStories';
 import { assembleNarratorContext } from '../engine/contextAssembler';
 import { parseLooseJson } from '../engine/jsonExtract';
 import { cleanNarrativeText } from '../engine/narrativeCleaner';
 import { evaluateNarrativeGuard } from '../engine/narrativeGuard';
 import { applyStateDelta } from '../engine/stateDeltaApplier';
-import { buildStoryRecordFromParsed, parseAdvancedStoryJson } from '../storyImport';
+import { parseAdvancedStoryJson } from '../storyImport';
 import { matchWorldbook } from '../worldbookMatcher';
 import { clearMemoryDbForTests } from '../../storage/db';
 import {
@@ -39,33 +39,25 @@ describe('ApiEndpointPolicy (Web)', () => {
   });
 });
 
-describe('Advanced Story Import & Built-in Templates', () => {
-  it('validates both built-in templates strictly and preserves sample_dialogues & character_fields', () => {
-    for (const tpl of BUILTIN_ADVANCED_TEMPLATES) {
-      const parsed = parseAdvancedStoryJson(tpl.json, true);
-      expect(parsed.world.name.length).toBeGreaterThan(0);
-      expect(parsed.player.name.length).toBeGreaterThan(0);
-      expect(parsed.characters.length).toBeGreaterThan(0);
-      expect(parsed.worldbook.length).toBeGreaterThan(0);
-      if (tpl.id === 'shendiao') {
-        expect(parsed.world.name).toBe('神雕侠侣 · 终南烟雨');
-        expect(parsed.player.name).toBe('杨过');
-        expect(parsed.characters.length).toBe(24);
-        expect(parsed.worldbook.length).toBe(42);
-        expect(parsed.player.custom_attributes.story_mode).toBe('正史主线');
-        expect(parsed.player.custom_attributes.destiny_nudges).toBe('0');
-        expect(parsed.opening.active_characters).toEqual(['赵志敬', '鹿清笃', '甄志丙']);
-      }
-      if (tpl.id === 'misty_harbor') {
-        expect(parsed.world.name).toBe('雾港老城');
-        expect(parsed.player.name).toBe('沈舟');
-        const xuTang = parsed.characters.find((c) => c.name === '许棠');
-        expect(xuTang?.lore.sample_dialogues.length).toBeGreaterThan(0);
-        const primary = playerPrimaryFields(parsed.player, parsed.world.character_fields);
-        expect(primary.map((p) => p.definition.label)).toContain('精力');
-        expect(primary.map((p) => p.definition.label)).toContain('警觉度');
-      }
-    }
+describe('Sole Default Story: 神雕侠侣 · 终南烟雨', () => {
+  it('ships Shen Diao Xia Lv as the sole built-in template and default story', () => {
+    expect(BUILTIN_ADVANCED_TEMPLATES).toHaveLength(1);
+    expect(BUILTIN_ADVANCED_TEMPLATES[0].id).toBe('shendiao');
+
+    const parsed = parseAdvancedStoryJson(BUILTIN_ADVANCED_TEMPLATES[0].json, true);
+    expect(parsed.world.name).toBe('神雕侠侣 · 终南烟雨');
+    expect(parsed.player.name).toBe('杨过');
+    expect(parsed.characters.length).toBe(24);
+    expect(parsed.worldbook.length).toBe(42);
+    expect(parsed.player.custom_attributes.story_mode).toBe('正史主线');
+    expect(parsed.player.custom_attributes.destiny_nudges).toBe('0');
+    expect(parsed.opening.active_characters).toEqual(['赵志敬', '鹿清笃', '甄志丙']);
+
+    const xiaoLongNv = parsed.characters.find((c) => c.name === '小龙女');
+    expect(xiaoLongNv?.lore.sample_dialogues.length).toBeGreaterThan(0);
+
+    const primary = playerPrimaryFields(parsed.player, parsed.world.character_fields);
+    expect(primary.map((p) => p.definition.label)).toEqual(['真气精力', '内功修为', '江湖凶险']);
   });
 
   it('rejects generic placeholder names in strict mode', () => {
@@ -81,10 +73,10 @@ describe('Advanced Story Import & Built-in Templates', () => {
   });
 });
 
-describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDeltaApplier)', () => {
+describe('Engine V2 Core with Shen Diao Xia Lv', () => {
   it('cleans fenced/JSON-wrapped narrative output cleanly', () => {
-    const raw = '```json\n{"narrative": "细雨落在青石巷的屋檐上，沈舟推开木门。"}\n```';
-    expect(cleanNarrativeText(raw)).toBe('细雨落在青石巷的屋檐上，沈舟推开木门。');
+    const raw = '```json\n{"narrative": "终南山松风猎猎，杨过冷笑一声横剑当胸。"}\n```';
+    expect(cleanNarrativeText(raw)).toBe('终南山松风猎猎，杨过冷笑一声横剑当胸。');
   });
 
   it('strips meta-leak sentences and rejects overly short text on attempt 0', () => {
@@ -92,7 +84,7 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
     expect(shortVerdict.kind).toBe('retry');
 
     const prose =
-      '青石巷的石板缝里积着雨水，走一步映一段屋檐影子。作为AI我来为你续写。沈舟把帆布包往肩上提了提，拐进听雨茶馆的木门，迎面一股炒青乌龙的香气扑来。许棠正在擦柜台，听见门响抬头笑道：“来得正好，二楼现在没人，水刚烧开。”';
+      '终南山重阳宫演武场上松风猎猎，几十双眼睛齐刷刷落在杨过身上。作为AI我来为你续写。鹿清笃冷哼一声，提着铁木剑大步跨出队列，剑尖斜指青石板：“杨师弟，既然入门三月，今日便请指教！”赵志敬在阶上捻须微笑，眼底却闪过一丝阴冷。';
     const passVerdict = evaluateNarrativeGuard(prose, '', 0);
     expect(passVerdict.kind).toBe('pass');
     if (passVerdict.kind === 'pass') {
@@ -101,52 +93,54 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
     }
   });
 
-  it('matches worldbook with location > recent > input priority', () => {
-    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
-    const parsed = parseAdvancedStoryJson(misty.json, true);
-    const rec = buildStoryRecordFromParsed(parsed);
-    const matched = matchWorldbook('去七号码头看看清单', rec.story, rec.worldbook, [], 5);
+  it('matches worldbook with location > recent > input priority on Shen Diao lore', () => {
+    const rec = createDefaultStory();
+    const matched = matchWorldbook('我想逃进后山活死人墓看看玉蜂', rec.story, rec.worldbook, [], 6);
     expect(matched.length).toBeGreaterThan(0);
-    expect(matched.some((m) => m.name.includes('码头') || m.keywords.includes('清单'))).toBe(true);
+    expect(matched.some((m) => m.name === '活死人墓' || m.name.includes('玉蜂'))).toBe(true);
   });
 
-  it('assembles narrator prompt with world, player, present NPCs, and length hint', () => {
-    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
-    const parsed = parseAdvancedStoryJson(misty.json, true);
-    const rec = buildStoryRecordFromParsed(parsed);
-    const prompt = assembleNarratorContext(rec, '推门走进茶馆看看许棠在不在', 'standard');
-    expect(prompt.systemPrompt).toContain('雾港老城');
-    expect(prompt.systemPrompt).toContain('沈舟');
+  it('assembles narrator prompt containing Yang Guo, world rules, and 3-nudge branching law', () => {
+    const rec = createDefaultStory();
+    const prompt = assembleNarratorContext(rec, '我不理会鹿清笃挑衅，转身准备溜下终南山', 'standard');
+    expect(prompt.systemPrompt).toContain('神雕侠侣 · 终南烟雨');
+    expect(prompt.systemPrompt).toContain('杨过');
+    expect(prompt.systemPrompt).toContain('三度引流');
+    expect(prompt.systemPrompt).toContain('自创江湖');
+    expect(prompt.userTurn).toContain('赵志敬');
     expect(prompt.userTurn).toContain('【本次篇幅】');
-    expect(prompt.userTurn).toContain('推门走进茶馆看看许棠在不在');
   });
 
-  it('applies StateDelta incrementally without overwriting rich worldbook descriptions', () => {
-    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
-    const parsed = parseAdvancedStoryJson(misty.json, true);
-    const rec = buildStoryRecordFromParsed(parsed);
-    const existingEntry = rec.worldbook.find((w) => w.name === '听雨茶馆');
-    expect(existingEntry).toBeDefined();
+  it('tracks story_mode & destiny_nudges through 3 nudges into 自创江湖 without clobbering worldbook', () => {
+    const rec = createDefaultStory();
+    const existingGumu = rec.worldbook.find((w) => w.name === '活死人墓')!;
 
     const delta = parseLooseJson<Record<string, unknown>>(`
       \`\`\`json
       {
-        "summary": "沈舟在听雨茶馆与许棠确认了铜印线索。",
-        "scene": { "location": "听雨茶馆二楼", "present": ["许棠"] },
-        "npcs": [{ "name": "许棠", "favor_delta": 6, "trust_delta": 5, "memory": "与沈舟约定一同查清1998年码头清单" }],
-        "world": [{ "name": "听雨茶馆", "type": "location", "description": "二楼靠窗的榆木桌适合密谈。" }],
-        "suggestions": ["询问陆沉来意", "翻看旧清单背面", "下楼去老修表店"]
+        "summary": "杨过三次婉拒重返终南山与大胜关之邀，决意远走大理自创江湖。",
+        "scene": { "location": "风陵渡口", "present": [] },
+        "player": {
+          "fields": {
+            "story_mode": "自创江湖",
+            "destiny_nudges": "3",
+            "internal_force": "28",
+            "martial_realm": "三流好手"
+          }
+        },
+        "world": [{ "name": "活死人墓", "type": "location", "description": "江湖传闻白衣仙子与赤练仙子曾在墓中大战。" }],
+        "suggestions": ["在渡口酒肆听听江湖消息", "雇船南下前往江南", "寻找奇人异士切磋武艺"]
       }
       \`\`\`
     `);
     expect(delta).not.toBeNull();
-    const out = applyStateDelta(rec, delta as never, [1], '2026-11-26T21:00:00Z');
-    const updatedTeaHouse = out.record.worldbook.find((w) => w.name === '听雨茶馆');
-    expect(updatedTeaHouse?.description).toContain(existingEntry!.description.slice(0, 10));
-    expect(updatedTeaHouse?.description).toContain('二楼靠窗的榆木桌适合密谈');
-    const updatedXuTang = out.record.characters.find((c) => c.name === '许棠');
-    expect(updatedXuTang?.relationships['沈舟']?.favor).toBe((existingEntry ? 6 : 6));
-    expect(updatedXuTang?.memories.length).toBe(1);
+    const out = applyStateDelta(rec, delta as never, [3], '2026-11-26T22:15:00Z');
+    expect(out.record.player.custom_attributes.story_mode).toBe('自创江湖');
+    expect(out.record.player.custom_attributes.destiny_nudges).toBe('3');
+    expect(out.record.player.custom_attributes.martial_realm).toBe('三流好手');
+    const updatedGumu = out.record.worldbook.find((w) => w.name === '活死人墓')!;
+    expect(updatedGumu.description).toContain(existingGumu.description.slice(0, 12));
+    expect(updatedGumu.description).toContain('白衣仙子与赤练仙子曾在墓中大战');
     expect(out.suggestions).toHaveLength(3);
   });
 
@@ -159,22 +153,22 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
           default_value: '0', unit: '', applies_to: 'all', display: 'detail',
           primary_for: 'all', update_mode: 'event', order: 4,
         },
-        '26',
+        '14',
         false,
       ),
-    ).toBe('26岁');
+    ).toBe('14岁');
     expect(
       formatFieldValue(
         {
-          key: 'alertness', label: '警觉度', description: '', group: 'status',
+          key: 'risk', label: '江湖凶险', description: '', group: 'status',
           value_type: 'number', min_value: 0, max_value: 100, options: [],
-          default_value: '35', unit: '%', applies_to: 'all', display: 'primary',
+          default_value: '25', unit: '%', applies_to: 'player', display: 'primary',
           primary_for: 'player', update_mode: 'dynamic', order: 20,
         },
-        '55',
+        '35',
         false,
       ),
-    ).toBe('55%');
+    ).toBe('35%');
   });
 });
 
@@ -183,16 +177,16 @@ describe('Repository Checkpoints, Rollback & Backup Export/Import', () => {
     clearMemoryDbForTests();
   });
 
-  it('rolls back round state cleanly and round-trips story export/import', async () => {
-    const story = createStoryFromPreset(CHARACTER_PRESETS[0]);
+  it('rolls back round state cleanly and round-trips Shen Diao story export/import', async () => {
+    const story = createDefaultStory();
     story.checkpoints[1] = createCheckpointSnapshot(story, 1, false);
     story.story.current_round = 1;
-    story.story.current_location = '近岸商务区';
+    story.story.current_location = '终南山后山古林与寒潭';
     story.narratives.push({
       turn: 1,
-      user_input: '坐地铁去公司',
-      narrative: '地铁车厢里挤满了早高峰通勤的人。',
-      created_at: '2026-11-26T21:00:00Z',
+      user_input: '施展蛤蟆功撞开鹿清笃，转身奔向后山松林',
+      narrative: '杨过伏低身子双掌骤推，震得鹿清笃连退数步，趁乱跃入后山松林。',
+      created_at: '2026-11-26T22:15:00Z',
     });
     await saveStory(story);
 
@@ -200,10 +194,11 @@ describe('Repository Checkpoints, Rollback & Backup Export/Import', () => {
     const imported = await importBackupBundle(JSON.stringify(exported));
     expect(imported).toHaveLength(1);
     expect(imported[0].narratives).toHaveLength(1);
+    expect(imported[0].player.name).toBe('杨过');
 
     const rolled = await rollbackToBeforeRound(story.id, 1);
     expect(rolled.story.current_round).toBe(0);
-    expect(rolled.story.current_location).toBe('云桥里老小区');
+    expect(rolled.story.current_location).toBe('终南山重阳宫演武场');
     expect(rolled.narratives).toHaveLength(0);
 
     const fetched = await getStory(story.id);

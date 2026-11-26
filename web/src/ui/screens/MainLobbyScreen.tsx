@@ -24,7 +24,7 @@ interface MainLobbyScreenProps {
   modelLabel: string;
   onRefresh: () => Promise<void>;
   onOpenStory: (storyId: string) => void;
-  onModernStart: () => void;
+  onDefaultStart: () => Promise<void>;
   onImportStory: () => void;
   onOpenSettings: () => void;
   onToast: (msg: string) => void;
@@ -52,13 +52,24 @@ export function MainLobbyScreen({
   modelLabel,
   onRefresh,
   onOpenStory,
-  onModernStart,
+  onDefaultStart,
   onImportStory,
   onOpenSettings,
   onToast,
 }: MainLobbyScreenProps) {
   const [confirmDelete, setConfirmDelete] = useState<StoryMeta | null>(null);
+  const [creatingDefault, setCreatingDefault] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleDefaultStart = async () => {
+    if (creatingDefault) return;
+    setCreatingDefault(true);
+    try {
+      await onDefaultStart();
+    } finally {
+      setCreatingDefault(false);
+    }
+  };
 
   const handleExportAll = async () => {
     try {
@@ -167,32 +178,35 @@ export function MainLobbyScreen({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={onImportStory}
-              className="group flex items-center gap-4 rounded-[20px] border border-[#E7C278]/35 bg-[#362B16]/65 p-4 text-left transition-all hover:border-[#E7C278]/65 hover:bg-[#362B16]/90"
+              disabled={creatingDefault}
+              onClick={() => void handleDefaultStart()}
+              className="group flex items-center gap-4 rounded-[20px] border border-[#E7C278]/40 bg-[#362B16]/70 p-4 text-left transition-all hover:border-[#E7C278]/75 hover:bg-[#362B16]/95 disabled:opacity-60"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#E7C278] text-[#231904]">
-                <FileJson className="h-6 w-6" />
+                <Sparkles className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-semibold text-[#FBE2AC]">导入故事 / 剧本</div>
-                <div className="mt-0.5 text-xs text-[#ECEAE4]/75">
-                  AI 解析世界观、高级 JSON 模板（含雾港老城 &amp; 魔法学院）
+                <div className="text-[15px] font-semibold text-[#FBE2AC]">
+                  {creatingDefault ? '正在初始化终南山江湖...' : '神雕侠侣 · 立即开局'}
+                </div>
+                <div className="mt-0.5 text-xs text-[#ECEAE4]/80">
+                  扮演杨过 · 24 位经典人物 / 42 条世界书 / 三度引流 + 自创江湖
                 </div>
               </div>
             </button>
 
             <button
               type="button"
-              onClick={onModernStart}
+              onClick={onImportStory}
               className="group flex items-center gap-4 rounded-[20px] border border-[#292F3C] bg-[#1B1F28] p-4 text-left transition-all hover:border-[#7AD0B8]/50 hover:bg-[#232834]"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#17332C] text-[#7AD0B8]">
-                <Sparkles className="h-6 w-6" />
+                <FileJson className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-semibold text-[#ECEAE4]">现代开局</div>
+                <div className="text-[15px] font-semibold text-[#ECEAE4]">自定义导入故事</div>
                 <div className="mt-0.5 text-xs text-[#A0A8B6]">
-                  海临市真实人生模拟 · 5 位预设身份或自定义开局
+                  查看/改写神雕 JSON 设定、上传剧本文件或 AI 解析文本
                 </div>
               </div>
             </button>
@@ -215,7 +229,7 @@ export function MainLobbyScreen({
               </div>
               <h3 className="mt-4 text-base font-semibold text-[#ECEAE4]">书架还是空的</h3>
               <p className="mt-1.5 max-w-sm text-xs leading-6 text-[#A0A8B6]">
-                点击上方「导入故事」试试内置的《雾港老城》或《白塔魔法学院》，或者用「现代开局」直接开启海临市故事。
+                点击上方「神雕侠侣 · 立即开局」化身十四岁杨过踏入终南山江湖，或通过「自定义导入故事」载入你自己的剧本。
               </p>
             </div>
           ) : (

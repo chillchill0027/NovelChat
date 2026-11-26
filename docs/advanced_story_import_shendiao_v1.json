@@ -172,7 +172,7 @@
       {
         "key": "story_mode",
         "label": "江湖命线",
-        "description": "正史主线=沿神雕大势推进；偏离试探=已偏离且在3次主动回归引导内；自创江湖=3次引导后仍偏离，彻底自由不再拉回，仅大势自行演进",
+        "description": "偏离神雕主线为偏离试探；引流满3次仍拒回或明确自闯则改自创江湖",
         "group": "status",
         "value_type": "choice",
         "options": [
@@ -183,13 +183,13 @@
         "default_value": "正史主线",
         "applies_to": "player",
         "display": "detail",
-        "update_mode": "event",
+        "update_mode": "dynamic",
         "order": 35
       },
       {
         "key": "destiny_nudges",
         "label": "主线引流次数",
-        "description": "偏离原著主线后已触发的主动回归引导次数（上限3次；满3次且仍偏离则切为自创江湖不再拉回）",
+        "description": "每次剧情出现主线引流线索且被主角拒绝远离时加1，满3次即转自创江湖",
         "group": "status",
         "value_type": "number",
         "min_value": 0,
@@ -198,7 +198,7 @@
         "unit": "次",
         "applies_to": "player",
         "display": "detail",
-        "update_mode": "event",
+        "update_mode": "dynamic",
         "order": 36
       },
       {
