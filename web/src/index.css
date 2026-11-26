@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+ * Material 3 Expressive Editorial Dark Palette — "Midnight Ink & Warm Lamp"
+ * Identical tokens to Android NovelChat 2.0.0 Color.kt for OLED reading.
+ * ========================================================================== */
+:root {
+  color-scheme: dark;
+
+  --obsidian: #0E1014;
+  --surface-lowest: #090B0E;
+  --surface-low: #15181F;
+  --surface-base: #1B1F28;
+  --surface-high: #232834;
+  --surface-highest: #2D3342;
+
+  --amber: #E7C278;
+  --on-amber: #231904;
+  --amber-container: #362B16;
+  --on-amber-container: #FBE2AC;
+
+  --mist: #B5C1E3;
+  --on-mist: #1B2338;
+  --mist-container: #252B3D;
+  --on-mist-container: #DCE4FA;
+
+  --sage: #7AD0B8;
+  --on-sage: #0A2720;
+  --sage-container: #17332C;
+  --on-sage-container: #B6F0DF;
+
+  --ink-primary: #ECEAE4;
+  --ink-secondary: #A0A8B6;
+  --ink-muted: #6E7686;
+  --hairline: #292F3C;
+
+  --user-bubble: #222A3A;
+  --user-bubble-border: #333F56;
+  --prose-rule: #54472C;
+
+  --cv-green: #6ED49B;
+  --cv-yellow: #EAC86B;
+  --cv-orange: #EE9F62;
+  --cv-red: #F07B84;
+  --error-container: #3B1B20;
+  --on-error-container: #FFD9DC;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--obsidian);
+  color: var(--ink-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "MiSans", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Custom subtle scrollbars for dark OLED reading */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2D3342;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3E4659;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.safe-top {
+  padding-top: var(--safe-top);
+}
+
+.safe-bottom {
+  padding-bottom: var(--safe-bottom);
+}
+
+@keyframes pulseCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  vertical-align: -0.12em;
+  margin-left: 2px;
+  background-color: var(--amber);
+  border-radius: 1px;
+  animation: pulseCursor 1s ease-in-out infinite;
+}

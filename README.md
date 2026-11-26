@@ -1,10 +1,27 @@
 # NovelChat
 
-AI 驱动的互动叙事引擎。Android 原生应用。
+AI 驱动的互动叙事引擎。提供 **Android 原生应用** 与 **纯静态 Web / PWA 网页版**（零后端，手机/平板可添加到主屏幕全屏游玩）。
 
 当前版本：`2.0.0`
 
-## 快速开始
+- **网页版在线访问（GitHub Pages）**：https://chillchill0027.github.io/NovelChat/
+- **Android 最新安装包（Releases）**：https://github.com/chillchill0027/NovelChat/releases/latest
+
+## 网页版（纯静态 Web / PWA）
+
+位于 [`web/`](web/) 目录，采用 React + TypeScript + Vite + Tailwind CSS + PWA，浏览器端完整运行二代异步双轨引擎，数据与 API 密钥仅保存在本地 `IndexedDB`，支持一键导出/导入 JSON 存档实现手机/平板/电脑互通，并 100% 兼容高级 JSON 剧本模板。
+
+```bash
+cd web/
+npm install
+npm run dev      # 本地预览
+npm test         # 运行单元测试
+npm run build    # 构建纯静态 PWA 产物至 web/dist/
+```
+
+推送至 `main` 后，[`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml) 会自动测试并部署到 GitHub Pages。
+
+## Android 快速开始
 
 ### 前置要求
 
