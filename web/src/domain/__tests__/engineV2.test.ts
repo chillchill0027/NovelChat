@@ -47,6 +47,15 @@ describe('Advanced Story Import & Built-in Templates', () => {
       expect(parsed.player.name.length).toBeGreaterThan(0);
       expect(parsed.characters.length).toBeGreaterThan(0);
       expect(parsed.worldbook.length).toBeGreaterThan(0);
+      if (tpl.id === 'shendiao') {
+        expect(parsed.world.name).toBe('神雕侠侣 · 终南烟雨');
+        expect(parsed.player.name).toBe('杨过');
+        expect(parsed.characters.length).toBe(24);
+        expect(parsed.worldbook.length).toBe(42);
+        expect(parsed.player.custom_attributes.story_mode).toBe('正史主线');
+        expect(parsed.player.custom_attributes.destiny_nudges).toBe('0');
+        expect(parsed.opening.active_characters).toEqual(['赵志敬', '鹿清笃', '甄志丙']);
+      }
       if (tpl.id === 'misty_harbor') {
         expect(parsed.world.name).toBe('雾港老城');
         expect(parsed.player.name).toBe('沈舟');
@@ -93,7 +102,8 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
   });
 
   it('matches worldbook with location > recent > input priority', () => {
-    const parsed = parseAdvancedStoryJson(BUILTIN_ADVANCED_TEMPLATES[0].json, true);
+    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
+    const parsed = parseAdvancedStoryJson(misty.json, true);
     const rec = buildStoryRecordFromParsed(parsed);
     const matched = matchWorldbook('去七号码头看看清单', rec.story, rec.worldbook, [], 5);
     expect(matched.length).toBeGreaterThan(0);
@@ -101,7 +111,8 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
   });
 
   it('assembles narrator prompt with world, player, present NPCs, and length hint', () => {
-    const parsed = parseAdvancedStoryJson(BUILTIN_ADVANCED_TEMPLATES[0].json, true);
+    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
+    const parsed = parseAdvancedStoryJson(misty.json, true);
     const rec = buildStoryRecordFromParsed(parsed);
     const prompt = assembleNarratorContext(rec, '推门走进茶馆看看许棠在不在', 'standard');
     expect(prompt.systemPrompt).toContain('雾港老城');
@@ -111,7 +122,8 @@ describe('Engine V2 Core (Cleaner, Guard, Worldbook, ContextAssembler, StateDelt
   });
 
   it('applies StateDelta incrementally without overwriting rich worldbook descriptions', () => {
-    const parsed = parseAdvancedStoryJson(BUILTIN_ADVANCED_TEMPLATES[0].json, true);
+    const misty = BUILTIN_ADVANCED_TEMPLATES.find((t) => t.id === 'misty_harbor')!;
+    const parsed = parseAdvancedStoryJson(misty.json, true);
     const rec = buildStoryRecordFromParsed(parsed);
     const existingEntry = rec.worldbook.find((w) => w.name === '听雨茶馆');
     expect(existingEntry).toBeDefined();

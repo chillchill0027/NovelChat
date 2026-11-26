@@ -137,6 +137,25 @@ class AdvancedStoryImportPolicyTest {
         assertTrue(xuTang.lore.sampleDialogues.first().contains("沈师傅"))
     }
 
+    @Test
+    fun shendiaoExample_validatesFullWorldAndDestinyMechanics() {
+        val example = generateSequence(File(System.getProperty("user.dir").orEmpty())) { it.parentFile }
+            .map { root -> File(root, "docs/advanced_story_import_shendiao_v1.json") }
+            .first(File::isFile)
+
+        val result = AdvancedStoryImportPolicy.parse(example.readText())
+
+        assertEquals("神雕侠侣 · 终南烟雨", result.worldSetting.name)
+        assertEquals("杨过", result.player.name)
+        assertEquals("正史主线", result.player.customAttributes["story_mode"])
+        assertEquals("0", result.player.customAttributes["destiny_nudges"])
+        assertEquals(24, result.npcs.size)
+        assertEquals(42, result.worldbook.size)
+        assertEquals(listOf("赵志敬", "鹿清笃", "甄志丙"), result.opening.activeCharacters)
+        val xiaoLongNv = result.npcs.first { it.name == "小龙女" }
+        assertTrue(xiaoLongNv.lore.sampleDialogues.isNotEmpty())
+    }
+
     private fun assertFailureContains(raw: String, expected: String) {
         try {
             AdvancedStoryImportPolicy.parse(raw)

@@ -1,3 +1,4 @@
+import shendiaoTemplate from '../assets/templates/shendiao_v1.json';
 import mistyHarborTemplate from '../assets/templates/misty_harbor_v1.json';
 import magicAcademyTemplate from '../assets/templates/magic_academy_v1.json';
 import type {
@@ -107,6 +108,14 @@ export const CHARACTER_PRESETS: CharacterPreset[] = [
 ];
 
 export const BUILTIN_ADVANCED_TEMPLATES = [
+  {
+    id: 'shendiao',
+    name: '神雕侠侣 · 终南烟雨（扮演杨过）',
+    tag: '史诗武侠 · 三度引流+自创江湖',
+    description:
+      '7 万字级超大体量武侠设定：24 位实名经典人物与台词口吻、42 条地点/宗门/秘籍/八大年表世界书；偏离主线触发 3 次自然回归引导，继续偏离彻底解绑「自创江湖」，江湖大势仍按年表在背景中独立演进。',
+    json: JSON.stringify(shendiaoTemplate, null, 2),
+  },
   {
     id: 'misty_harbor',
     name: '雾港老城 · 旧书修补师',

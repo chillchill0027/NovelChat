@@ -166,7 +166,7 @@ export function StoryImportScreen({ settings, onBack, onCreated }: StoryImportSc
             {mode === 'advanced' ? (
               <>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {BUILTIN_ADVANCED_TEMPLATES.map((tpl) => (
+                  {BUILTIN_ADVANCED_TEMPLATES.map((tpl, idx) => (
                     <button
                       key={tpl.id}
                       type="button"
@@ -175,11 +175,15 @@ export function StoryImportScreen({ settings, onBack, onCreated }: StoryImportSc
                         setError(null);
                         setParsed(null);
                       }}
-                      className="rounded-2xl border border-[#292F3C] bg-[#1B1F28] p-3.5 text-left transition-colors hover:border-[#E7C278]/50"
+                      className={`rounded-2xl border border-[#292F3C] bg-[#1B1F28] p-3.5 text-left transition-colors hover:border-[#E7C278]/50 ${
+                        idx === 0 && BUILTIN_ADVANCED_TEMPLATES.length % 2 === 1
+                          ? 'border-[#E7C278]/30 sm:col-span-2'
+                          : ''
+                      }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-[#ECEAE4]">{tpl.name}</span>
-                        <span className="rounded-full bg-[#362B16] px-2 py-0.5 text-[10px] text-[#E7C278]">
+                        <span className="shrink-0 rounded-full bg-[#362B16] px-2 py-0.5 text-[10px] text-[#E7C278]">
                           一键载入
                         </span>
                       </div>
