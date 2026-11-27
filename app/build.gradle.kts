@@ -25,8 +25,8 @@ android {
         applicationId = "com.novelchat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.1.0"
+        versionCode = 8
+        versionName = "2.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         if (providers.gradleProperty("novelchat.qaInstrumentation").orNull == "true" ||
@@ -50,6 +50,30 @@ android {
         }
     }
 
+    val releaseStorePath = evalProp("novelchat.storeFile")
+    val releaseStorePassword = evalProp("novelchat.storePassword")
+    val releaseKeyAlias = evalProp("novelchat.keyAlias")
+    val releaseKeyPassword = evalProp("novelchat.keyPassword")
+    val hasReleaseSigning = !releaseStorePath.isNullOrBlank() &&
+        file(releaseStorePath).isFile &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank()
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         create("qa") {
             initWith(getByName("debug"))
@@ -59,6 +83,10 @@ android {
         }
         release {
             isMinifyEnabled = false
+            isDebuggable = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

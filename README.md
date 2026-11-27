@@ -2,7 +2,7 @@
 
 AI 驱动的互动叙事引擎。提供 **Android 原生应用** 与 **纯静态 Web / PWA 网页版**（零后端，手机/平板可添加到主屏幕全屏游玩）。
 
-当前版本：`2.1.0`
+当前版本：`2.1.1`
 
 - **网页版在线访问（GitHub Pages）**：https://chillchill0027.github.io/NovelChat/
 - **Android 最新安装包（Releases）**：https://github.com/chillchill0027/NovelChat/releases/latest
