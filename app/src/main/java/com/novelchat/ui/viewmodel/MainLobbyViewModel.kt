@@ -64,14 +64,7 @@ class MainLobbyViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun createConversation(
-        name: String, desc: String, card: CharacterCard? = null,
-        world: WorldSetting = defaultModernWorldSetting,
-        player: PlayerState = PlayerState(name = CharacterNamingPolicy.DEFAULT_PLAYER_NAME, charm = 50, huntingSkill = 50, socialRank = "C"),
-        presetKey: String = "",
-        openingPrompt: String = "",
-        onCreated: (Long) -> Unit
-    ) {
+    fun createDefaultStory(onCreated: (Long) -> Unit) {
         if (_operationState.value.deletingId != null) return
         if (!creationGuard.compareAndSet(false, true)) return
         invalidateLoad()
@@ -82,10 +75,10 @@ class MainLobbyViewModel(application: Application) : AndroidViewModel(applicatio
             )
             try {
                 val id = try {
-                    doCreateConversation(name, desc, card, world, player, presetKey, openingPrompt)
+                    doCreateDefaultStory()
                 } catch (e: Exception) {
                     e.rethrowCancellation()
-                    showError(UserVisibleTextPolicy.failure("创建故事失败", e.message))
+                    showError(UserVisibleTextPolicy.failure("创建默认故事失败", e.message))
                     return@launch
                 }
                 try {
@@ -108,36 +101,33 @@ class MainLobbyViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private suspend fun doCreateConversation(
-        name: String, desc: String, card: CharacterCard? = null,
-        world: WorldSetting = defaultModernWorldSetting, player: PlayerState = PlayerState(name = CharacterNamingPolicy.DEFAULT_PLAYER_NAME),
-        presetKey: String = "",
-        openingPrompt: String = ""
-    ): Long = withContext(Dispatchers.IO) {
+    private suspend fun doCreateDefaultStory(): Long = withContext(Dispatchers.IO) {
         val characterId = fileStorage.createConversationStorage()
         try {
+            val createdAt = fileStorage.getCurrentTimeString()
+            val world = defaultStoryWorldSetting()
+            val player = defaultStoryPlayerState()
             fileStorage.saveWorldSetting(characterId, world)
             fileStorage.savePlayerState(characterId, player)
-            if (card != null) fileStorage.saveCharacterCard(characterId, card)
-            if (world.name == defaultModernWorldSetting.name) {
-                seedDefaultModernStory(characterId, fileStorage.getCurrentTimeString())
-            }
-            if (openingPrompt.isNotBlank()) {
-                val currentState = fileStorage.loadStoryState(characterId)
-                fileStorage.saveStoryState(
-                    characterId,
-                    CustomOpeningPolicy.apply(currentState, openingPrompt)
-                )
-            }
+            defaultStoryCharacters(createdAt).forEach { fileStorage.saveCharacterCard(characterId, it) }
+            defaultStoryWorldbookEntries(createdAt).forEach { fileStorage.saveWorldbookEntry(characterId, it) }
+            fileStorage.saveStoryState(characterId, defaultStoryState())
             fileStorage.completeConversationStorage(characterId)
 
+            val conciseDesc = listOf(world.name, player.class_)
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .joinToString(" · ")
+                .ifBlank { world.description.take(100) }
             val entry = ConversationEntry(
                 id = characterId,
-                characterName = name.trim().ifBlank { CharacterNamingPolicy.DEFAULT_PLAYER_NAME },
-                characterDesc = desc.trim().ifBlank { "自定义城市开局" },
-                type = if (presetKey.isNotBlank()) "preset" else "custom",
-                presetKey = presetKey, createdAt = fileStorage.getCurrentTimeString(),
-                lastMessageAt = fileStorage.getCurrentTimeString()
+                characterName = player.name.ifBlank { "杨过" },
+                characterDesc = conciseDesc,
+                type = "story",
+                presetKey = "shendiao",
+                createdAt = createdAt,
+                lastMessageAt = createdAt,
+                lastMessage = "等待开始剧情"
             )
             addToIndex(entry)
             characterId
@@ -148,12 +138,6 @@ class MainLobbyViewModel(application: Application) : AndroidViewModel(applicatio
             }
             throw e
         }
-    }
-
-    private suspend fun seedDefaultModernStory(characterId: Long, createdAt: String) {
-        defaultModernCharacters(createdAt).forEach { fileStorage.saveCharacterCard(characterId, it) }
-        defaultModernWorldbookEntries(createdAt).forEach { fileStorage.saveWorldbookEntry(characterId, it) }
-        fileStorage.saveStoryState(characterId, defaultModernStoryState())
     }
 
     fun deleteConversation(id: Long) {

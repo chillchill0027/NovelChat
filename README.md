@@ -2,7 +2,7 @@
 
 AI 驱动的互动叙事引擎。提供 **Android 原生应用** 与 **纯静态 Web / PWA 网页版**（零后端，手机/平板可添加到主屏幕全屏游玩）。
 
-当前版本：`2.0.0`
+当前版本：`2.1.0`
 
 - **网页版在线访问（GitHub Pages）**：https://chillchill0027.github.io/NovelChat/
 - **Android 最新安装包（Releases）**：https://github.com/chillchill0027/NovelChat/releases/latest
@@ -46,7 +46,7 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 2. 云端 API 必须使用 HTTPS 并填写密钥；无鉴权的本机或局域网模型可以使用 HTTP 并留空密钥
 3. 可点击「测试连接」确认配置；本地配置格式有效时也可以先继续导入故事
 4. 配置完成后再次启动会直接进入故事库
-5. 点击「现代开局」进入默认故事，或点击「导入故事」选择 AI 识别/高级 JSON 接入
+5. 点击「神雕侠侣」一键进入唯一默认剧本《神雕侠侣 · 终南烟雨》（扮演杨过），或点击「导入故事」选择 AI 识别/高级 JSON 接入
 6. 确认解析结果与主角设定，然后进入正式剧情模式
 
 高级接入支持从文件、剪贴板或内置模板导入版本化 JSON。世界规则、角色长期动机、初始身心状态、物品、世界书关系和开局现场都会结构化保存。`world_setting.character_fields` 可定义整张角色卡：内置字段可重命名、改范围和显示位置，也可新增任意字段；初始值写入 `custom_attributes`，后续按 `dynamic`、`event`、`manual` 规则随剧情刷新。接入材料：
@@ -55,12 +55,11 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 - [`docs/advanced_story_import_shendiao_v1.json`](docs/advanced_story_import_shendiao_v1.json)：唯一内置默认史诗剧本《神雕侠侣 · 终南烟雨》（扮演杨过，含 24 位经典实名角色、42 条世界书与「三度引流 + 自创江湖 + 八大年表自演」机制）
 - [`docs/advanced_story_import_v1.schema.json`](docs/advanced_story_import_v1.schema.json)：机器可读 JSON Schema
 
-默认故事方向：
+唯一默认故事：
 
-- 背景：当代虚构一线城市「海临市」
-- 类型：现代真实世界模拟器 RPG
-- 关注：租房、通勤、工作、健康、人际关系、收入压力和职业选择
-- 快速开局：林克（城市租客）、周然（职场新人）、许知南（自由职业者）、沈清禾（社区医生）、陆远（返乡创业者）
+- 剧本：《神雕侠侣 · 终南烟雨》（南宋端平元年，终南山重阳宫演武场开局）
+- 主角：十四岁的杨过（含 12 项武侠专属动态字段、24 位经典实名 NPC 与台词口吻、42 条地点/宗门/秘籍/八大年表世界书）
+- 命线机制：偏离原著主线时自然安排最多 3 次主动回归引导（`destiny_nudges: 0→3`）；继续偏离则彻底解绑进入「自创江湖」，不再受原著束缚，而江湖八大时代大事仍按年表在背景中独立演进
 
 默认配置：
 
@@ -110,7 +109,7 @@ APK 生成位置: `app/build/outputs/apk/debug/app-debug.apk`
 - **ApiRetryPolicy**: 仅在响应正文开始前重试短暂网络错误和 408/429/5xx，避免流式正文重复
 - **StoredJsonCodec**: 严格解析关键 JSON 存档，区分“文件不存在”和“文件已损坏”
 - **PlayerPromptSnapshotPolicy**: 将主角存档转换为中性、紧凑、可判断的模型上下文
-- **DefaultStory**: 内置现代真实世界模拟器默认故事、NPC 和世界书种子数据
+- **DefaultStory**: 内置唯一默认史诗剧本《神雕侠侣 · 终南烟雨》的加载与初始化种子数据
 - **LegacyDataMigrator**: 启动与列表加载时迁移旧测试索引，清理不适合当前产品方向的历史摘要
 
 ### 存储结构

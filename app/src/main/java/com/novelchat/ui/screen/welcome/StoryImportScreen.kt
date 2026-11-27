@@ -350,7 +350,7 @@ private fun AiRecognitionEditor(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
-            placeholder = "例如：当代海港旧城，主角沈舟经营旧书铺……",
+            placeholder = "例如：南宋终南山，十四岁孤儿杨过初入重阳宫……",
             modifier = Modifier.weight(1f)
         )
     }
@@ -395,8 +395,8 @@ private fun AdvancedJsonEditor(
             )
             ToolbarActionChip(
                 icon = Icons.AutoMirrored.Default.NoteAdd,
-                label = "模板",
-                contentDescription = "载入完整模板",
+                label = "神雕模板",
+                contentDescription = "载入《神雕侠侣》模板",
                 enabled = enabled,
                 onClick = onLoadTemplate
             )
@@ -546,7 +546,7 @@ private fun AdvancedImportGuideSheet(
             PrimaryPillButton(onClick = onLoadTemplate) {
                 Icon(Icons.AutoMirrored.Default.NoteAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("载入完整模板", fontWeight = FontWeight.SemiBold)
+                Text("载入《神雕侠侣》模板", fontWeight = FontWeight.SemiBold)
             }
             SecondaryPillButton(onClick = onCopyTemplate) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))

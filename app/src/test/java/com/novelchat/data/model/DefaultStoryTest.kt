@@ -1,65 +1,48 @@
 package com.novelchat.data.model
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DefaultStoryTest {
 
     @Test
-    fun defaultStory_remoteMessageContactsAreNotPhysicallyPresent() {
-        assertTrue(defaultModernStoryState().activeCharacters.isEmpty())
+    fun defaultStory_isSoleShenDiaoStory() {
+        assertTrue(DEFAULT_STORY_TEXT.contains("神雕侠侣 · 终南烟雨"))
+        assertTrue(DEFAULT_STORY_TEXT.contains("杨过"))
+        assertTrue(DEFAULT_STORY_TEXT.contains("3 次"))
+        assertTrue(DEFAULT_STORY_TEXT.contains("自创江湖"))
+        assertTrue(isDefaultStoryText(DEFAULT_STORY_TEXT))
+        assertEquals("神雕侠侣 · 终南烟雨", defaultStoryWorldSetting().name)
     }
 
     @Test
-    fun defaultStory_isModernRealWorldSimulator() {
-        assertTrue(DEFAULT_MODERN_STORY_TEXT.contains("现代真实世界模拟器 RPG"))
-        assertTrue(DEFAULT_MODERN_STORY_TEXT.contains("海临市"))
-        assertTrue(DEFAULT_MODERN_STORY_TEXT.contains("租房"))
-        assertEquals("城市生活模拟器", defaultModernWorldSetting.name)
-        assertEquals("无魔法、无超能力", defaultModernWorldSetting.magicLevel)
+    fun defaultStorySeed_hasFullPlayableSceneContext() {
+        val createdAt = "2026-11-27T09:00:00"
+        val player = defaultStoryPlayerState()
+        val characters = defaultStoryCharacters(createdAt)
+        val worldbook = defaultStoryWorldbookEntries(createdAt)
+        val storyState = defaultStoryState()
+
+        assertEquals("杨过", player.name)
+        assertEquals("正史主线", player.customAttributes["story_mode"])
+        assertEquals("0", player.customAttributes["destiny_nudges"])
+        assertEquals(24, characters.size)
+        assertEquals(42, worldbook.size)
+        assertEquals("终南山重阳宫演武场", storyState.currentLocation)
+        assertEquals(listOf("赵志敬", "鹿清笃", "甄志丙"), storyState.activeCharacters)
+        assertTrue(storyState.pendingEvents.isNotEmpty())
     }
 
     @Test
-    fun quickStartPresets_doNotUseFantasyDefaults() {
-        val joined = characterPresets.joinToString("\n") { "${it.key} ${it.name} ${it.description}" }
+    fun defaultStoryParseResult_hasStructuredStoryData() {
+        val result = defaultStoryParseResult()
 
-        assertTrue(joined.contains("城市租客"))
-        assertTrue(joined.contains("社区医生"))
-        assertFalse(joined.contains("城堡"))
-        assertFalse(joined.contains("骑士"))
-        assertFalse(joined.contains("魔法"))
-    }
-
-    @Test
-    fun defaultModernSeed_hasPlayableSceneContext() {
-        val createdAt = "2026-07-08T09:00:00"
-
-        assertEquals(3, defaultModernCharacters(createdAt).size)
-        assertEquals(4, defaultModernWorldbookEntries(createdAt).size)
-        assertEquals("云桥里老小区", defaultModernStoryState().currentLocation)
-        assertTrue(defaultModernStoryState().pendingEvents.any { it.contains("招聘顾问孟琪") })
-    }
-
-    @Test
-    fun defaultModernParseResult_hasStructuredStoryData() {
-        val result = defaultModernStoryParseResult()
-
-        assertTrue(isDefaultModernStoryText(DEFAULT_MODERN_STORY_TEXT))
-        assertEquals("城市生活模拟器", result.worldSetting.name)
-        assertEquals("林克", result.player.name)
-        assertTrue(result.npcs.map { it.name }.contains("招聘顾问孟琪"))
-        assertTrue(result.worldbook.map { it.name }.contains("周一三条消息"))
-        assertEquals("云桥里老小区", result.opening.currentLocation)
-        assertTrue(result.opening.pendingEvents.any { it.contains("同事林越") })
-    }
-
-    @Test
-    fun quickStartPresets_haveCharacterNamesSeparateFromIdentity() {
-        val renter = characterPresets.first { it.key == "renter" }
-
-        assertEquals("林克", renter.playerName)
-        assertEquals("城市租客", renter.name)
+        assertEquals("神雕侠侣 · 终南烟雨", result.worldSetting.name)
+        assertEquals("杨过", result.player.name)
+        assertTrue(result.npcs.any { it.name == "小龙女" })
+        assertTrue(result.npcs.any { it.name == "郭靖" })
+        assertTrue(result.worldbook.any { it.name == "活死人墓" })
+        assertEquals("终南山重阳宫演武场", result.opening.currentLocation)
     }
 }

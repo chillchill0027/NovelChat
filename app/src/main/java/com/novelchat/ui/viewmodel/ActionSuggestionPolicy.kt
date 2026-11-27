@@ -30,7 +30,7 @@ object ActionSuggestionPolicy {
             }
 
             add("观察一下周围")
-            add("查看手机上的消息")
+            add("打听眼下的动向")
         }
 
         return candidates.distinct().take(limit)

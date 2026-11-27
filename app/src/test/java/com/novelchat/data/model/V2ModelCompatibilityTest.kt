@@ -63,8 +63,9 @@ class V2ModelCompatibilityTest {
     }
 
     @Test
-    fun defaultModernCharacters_includeSpeechStyleAndSampleDialogues() {
-        val chars = defaultModernCharacters("2026-11-26T00:00:00")
+    fun defaultStoryCharacters_includeSpeechStyleAndSampleDialogues() {
+        val chars = defaultStoryCharacters("2026-11-27T00:00:00")
+        assertEquals(24, chars.size)
         assertTrue(chars.all { it.lore.speechStyle.isNotBlank() })
         assertTrue(chars.all { it.lore.sampleDialogues.isNotEmpty() })
     }

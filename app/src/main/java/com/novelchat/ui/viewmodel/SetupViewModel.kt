@@ -37,7 +37,7 @@ data class SetupState(
     val isContinuing: Boolean = false,
     val isProfileMutating: Boolean = false,
     val testResult: String? = null,
-    val storyText: String = DEFAULT_MODERN_STORY_TEXT,
+    val storyText: String = DEFAULT_STORY_TEXT,
     val storyImportMode: StoryImportMode = StoryImportMode.AI_RECOGNITION,
     val advancedStoryJson: String = "",
     val advancedImportSummary: String? = null,
@@ -286,7 +286,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     fun resetStoryDraft() {
         if (_state.value.isParsing || _state.value.isInitializing) return
         _state.value = _state.value.copy(
-            storyText = DEFAULT_MODERN_STORY_TEXT,
+            storyText = DEFAULT_STORY_TEXT,
             storyImportMode = StoryImportMode.AI_RECOGNITION,
             advancedStoryJson = "",
             parseResult = null,
@@ -381,8 +381,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             )
             try {
                 val storyText = _state.value.storyText.trim()
-                val parsed = if (isDefaultModernStoryText(storyText)) {
-                    defaultModernStoryParseResult()
+                val parsed = if (isDefaultStoryText(storyText)) {
+                    defaultStoryParseResult()
                 } else {
                     val prompt = buildParsePrompt(storyText)
                     var response = aiService.chatComplete(
@@ -655,7 +655,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun normalizeParseResult(result: StoryParseResult, storyText: String): StoryParseResult {
         val cleanedStory = storyText.trim()
-        val fallbackDescription = cleanedStory.take(600).ifBlank { defaultModernWorldSetting.description }
+        val fallbackDescription = cleanedStory.take(600).ifBlank { defaultStoryWorldSetting().description }
         val world = result.worldSetting.let { world ->
             world.copy(
                 name = world.name.ifBlank { inferTitle(cleanedStory) },

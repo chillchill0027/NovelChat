@@ -120,4 +120,16 @@ class CharacterNamingPolicyTest {
 
         assertEquals(text, CharacterNamingPolicy.normalizeNarrativeText(text))
     }
+
+    @Test
+    fun isGenericNpcName_filtersWuxiaBystandersWithoutRejectingNamedCharacters() {
+        assertTrue(CharacterNamingPolicy.isGenericNpcName("卖茶老汉"))
+        assertTrue(CharacterNamingPolicy.isGenericNpcName("赶车汉子"))
+        assertTrue(CharacterNamingPolicy.isGenericNpcName("胖商人"))
+        assertTrue(CharacterNamingPolicy.isGenericNpcName("精瘦江湖客"))
+        assertTrue(CharacterNamingPolicy.isGenericNpcName("店小二"))
+        assertFalse(CharacterNamingPolicy.isGenericNpcName("小龙女"))
+        assertFalse(CharacterNamingPolicy.isGenericNpcName("金轮法王"))
+        assertFalse(CharacterNamingPolicy.isGenericNpcName("孙婆婆"))
+    }
 }

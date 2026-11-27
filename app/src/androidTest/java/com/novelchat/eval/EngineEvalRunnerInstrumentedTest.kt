@@ -11,10 +11,6 @@ import com.novelchat.data.model.PlayerSkill
 import com.novelchat.data.model.PlayerState
 import com.novelchat.data.model.WorldSetting
 import com.novelchat.data.model.WorldbookEntry
-import com.novelchat.data.model.defaultModernCharacters
-import com.novelchat.data.model.defaultModernStoryState
-import com.novelchat.data.model.defaultModernWorldSetting
-import com.novelchat.data.model.defaultModernWorldbookEntries
 import com.novelchat.data.remote.AiService
 import com.novelchat.data.remote.llm.LlmMetrics
 import com.novelchat.data.remote.llm.LlmScheduler
@@ -282,21 +278,13 @@ class EngineEvalRunnerInstrumentedTest {
         val storyId = storage.createConversationStorage()
         val createdAt = storage.getCurrentTimeString()
         try {
-            if (scenario.storySource == "default_modern") {
-                storage.saveWorldSetting(storyId, defaultModernWorldSetting)
-                storage.savePlayerState(
-                    storyId,
-                    PlayerState(
-                        name = CharacterNamingPolicy.DEFAULT_PLAYER_NAME,
-                        class_ = "城市租客",
-                        background = "在海临市云桥里老小区租房的普通打工人。"
-                    )
-                )
-                defaultModernCharacters(createdAt).forEach { storage.saveCharacterCard(storyId, it) }
-                defaultModernWorldbookEntries(createdAt).forEach { storage.saveWorldbookEntry(storyId, it) }
-                storage.saveStoryState(storyId, defaultModernStoryState())
-            } else if (scenario.storySource.startsWith("asset:")) {
-                val assetPath = scenario.storySource.removePrefix("asset:")
+            val resolvedSource = if (scenario.storySource == "default_modern") {
+                "asset:eval/stories/modern_life_v1.json"
+            } else {
+                scenario.storySource
+            }
+            if (resolvedSource.startsWith("asset:")) {
+                val assetPath = resolvedSource.removePrefix("asset:")
                 val raw = testContext.assets.open(assetPath).bufferedReader().use { it.readText() }
                 val parsed = AdvancedStoryImportPolicy.parse(raw)
                 val ws = parsed.worldSetting

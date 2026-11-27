@@ -34,7 +34,7 @@ class ActionSuggestionPolicyTest {
         )
 
         assertTrue(result.contains("观察一下周围"))
-        assertTrue(result.contains("查看手机上的消息"))
+        assertTrue(result.contains("打听眼下的动向"))
         assertFalse(result.any { it.startsWith("和") })
     }
 

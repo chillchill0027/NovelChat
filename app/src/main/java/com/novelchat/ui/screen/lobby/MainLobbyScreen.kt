@@ -85,8 +85,8 @@ import com.novelchat.ui.viewmodel.MainLobbyViewModel
 @Composable
 fun MainLobbyScreen(
     viewModel: MainLobbyViewModel,
-    onNewPreset: () -> Unit,
-    onNewCustom: () -> Unit,
+    onStartDefaultStory: () -> Unit,
+    onImportStory: () -> Unit,
     onOpenChat: (Long) -> Unit,
     onSettings: () -> Unit
 ) {
@@ -173,23 +173,23 @@ fun MainLobbyScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     QuickStartCard(
-                        title = "导入故事",
-                        subtitle = "AI 解析或高级 JSON",
-                        icon = Icons.Default.AutoAwesome,
+                        title = if (operation.isCreating) "正在开局..." else "神雕侠侣",
+                        subtitle = "扮演杨过 · 终南烟雨",
+                        icon = Icons.Default.Explore,
                         iconBg = AmberContainer,
                         iconTint = AmberPrimary,
-                        enabled = operation.deletingId == null,
-                        onClick = onNewPreset,
+                        enabled = !operation.isCreating && operation.deletingId == null,
+                        onClick = onStartDefaultStory,
                         modifier = Modifier.weight(1f)
                     )
                     QuickStartCard(
-                        title = "现代开局",
-                        subtitle = "海临市人生模拟",
-                        icon = Icons.Default.Explore,
+                        title = "导入故事",
+                        subtitle = "AI 解析或高级 JSON",
+                        icon = Icons.Default.AutoAwesome,
                         iconBg = MistContainer,
                         iconTint = MistSecondary,
-                        enabled = operation.deletingId == null,
-                        onClick = onNewCustom,
+                        enabled = !operation.isCreating && operation.deletingId == null,
+                        onClick = onImportStory,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -259,7 +259,7 @@ fun MainLobbyScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "从上方导入设定，或直接开启一段现代都市故事",
+                                text = "点击上方立即开启《神雕侠侣》，或导入自定义故事设定",
                                 color = InkSecondary,
                                 fontSize = 13.sp
                             )

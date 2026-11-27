@@ -7,8 +7,6 @@ object Routes {
     const val STORY_CONFIRM = "story_confirm"
     const val CHARACTER_CONFIRM = "character_confirm/{characterId}"
     const val LOBBY = "lobby"
-    const val PRESET_SELECT = "preset_select"
-    const val CHARACTER_CUSTOM = "character_custom"
     const val CHAT = "chat/{characterId}"
     const val WORLDBOOK = "worldbook/{characterId}"
     const val CHARACTERS = "characters/{characterId}"

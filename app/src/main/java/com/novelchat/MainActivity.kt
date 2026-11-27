@@ -24,15 +24,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.novelchat.data.model.CharacterCard
-import com.novelchat.data.model.PlayerState
 import com.novelchat.ui.navigation.Routes
 import com.novelchat.ui.screen.chat.ChatScreen
 import com.novelchat.ui.screen.character.CharacterDetailScreen
 import com.novelchat.ui.screen.character.CharacterListScreen
-import com.novelchat.ui.screen.lobby.CharacterCustomScreen
 import com.novelchat.ui.screen.lobby.MainLobbyScreen
-import com.novelchat.ui.screen.lobby.PresetSelectScreen
 import com.novelchat.ui.screen.welcome.ApiSetupScreen
 import com.novelchat.ui.screen.welcome.CharacterConfirmScreen
 import com.novelchat.ui.screen.welcome.StoryConfirmScreen
@@ -128,14 +124,20 @@ fun NovelChatNavGraph() {
             )
         }
         composable(Routes.LOBBY) {
-            MainLobbyScreen(viewModel = lobbyVM,
-                onNewPreset = {
+            MainLobbyScreen(
+                viewModel = lobbyVM,
+                onStartDefaultStory = {
+                    lobbyVM.createDefaultStory { id ->
+                        navController.navigate(Routes.chat(id))
+                    }
+                },
+                onImportStory = {
                     setupVM.resetStoryDraft()
                     navController.navigate(Routes.STORY_IMPORT)
                 },
-                onNewCustom = { navController.navigate(Routes.PRESET_SELECT) },
                 onOpenChat = { id -> navController.navigate(Routes.chat(id)) },
-                onSettings = { navController.navigate(Routes.API_SETUP) })
+                onSettings = { navController.navigate(Routes.API_SETUP) }
+            )
         }
         composable(Routes.STORY_IMPORT) {
             StoryImportScreen(
@@ -166,73 +168,6 @@ fun NovelChatNavGraph() {
                     navController.navigate(Routes.chat(cid)) {
                         popUpTo(Routes.characterConfirm(cid)) { inclusive = true }
                     }
-                }
-            )
-        }
-        composable(Routes.PRESET_SELECT) {
-            val operation by lobbyVM.operationState.collectAsState()
-            PresetSelectScreen(
-                onBack = { navController.popBackStack() },
-                isCreating = operation.isCreating,
-                errorMessage = operation.errorMessage,
-                onErrorShown = lobbyVM::clearOperationError,
-                onCustom = { navController.navigate(Routes.CHARACTER_CUSTOM) },
-                onPresetSelected = { preset ->
-                    lobbyVM.createConversation(
-                        name = preset.playerName, desc = "${preset.name} · ${preset.description}",
-                        card = null,
-                        player = PlayerState(
-                            name = preset.playerName,
-                            class_ = preset.name,
-                            charm = preset.charm, huntingSkill = preset.huntingSkill,
-                            socialRank = preset.socialRank, luck = preset.luck,
-                            alpha = preset.alpha, resistance = preset.resistance,
-                            cv = preset.cv
-                        ),
-                        presetKey = preset.key,
-                        onCreated = { id ->
-                            navController.navigate(Routes.chat(id)) {
-                                popUpTo(Routes.LOBBY) { inclusive = false }
-                            }
-                        }
-                    )
-                }
-            )
-        }
-        composable(Routes.CHARACTER_CUSTOM) {
-            val operation by lobbyVM.operationState.collectAsState()
-            CharacterCustomScreen(
-                onBack = { navController.popBackStack() },
-                isCreating = operation.isCreating,
-                errorMessage = operation.errorMessage,
-                onErrorShown = lobbyVM::clearOperationError,
-                onCreate = { draft ->
-                    val combinedBackground = listOf(draft.description, draft.background)
-                        .filter { it.isNotBlank() }
-                        .joinToString("。")
-                    lobbyVM.createConversation(
-                        name = draft.name,
-                        desc = draft.description,
-                        card = null,
-                        player = PlayerState(
-                            name = draft.name,
-                            age = draft.age,
-                            gender = draft.gender.ifBlank { "未明确" },
-                            race = "人类",
-                            class_ = draft.occupation.ifBlank { "城市居民" },
-                            personality = draft.personality,
-                            appearance = draft.appearance,
-                            background = combinedBackground,
-                            charm = 50, huntingSkill = 30,
-                            socialRank = "C", alpha = 40, resistance = 35, cv = 5
-                        ),
-                        openingPrompt = draft.openingPrompt,
-                        onCreated = { id ->
-                            navController.navigate(Routes.chat(id)) {
-                                popUpTo(Routes.LOBBY) { inclusive = false }
-                            }
-                        }
-                    )
                 }
             )
         }

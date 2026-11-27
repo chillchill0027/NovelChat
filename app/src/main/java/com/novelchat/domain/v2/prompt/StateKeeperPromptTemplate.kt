@@ -15,7 +15,7 @@ object StateKeeperPromptTemplate {
         appendLine("规则：")
         appendLine("1. 只记录正文里实际发生的变化。不确定的就不写。所有字段都可以省略；什么都没变就输出 {\"summary\": \"…\"}。")
         appendLine("2. 人物一律使用【已知人物】里的原名。正文里首次出场、和主角有互动的人放进 new_npcs，并给出名字和身份。")
-        appendLine("3. 角色字段写本轮结束时的最终值，必须符合【字段说明】中的类型和范围。update_mode 为 manual 的字段不要写。")
+        appendLine("3. 角色字段写本轮结束时的最终值，必须符合【字段说明】中的类型和范围。update_mode 为 manual 的字段不要写。若存在【世界特殊状态规则】涉及的追踪字段（如命线、引流次数），每轮须按规则准确更新。")
         appendLine("4. 好感、信任写变化量 favor_delta 和 trust_delta（通常在 -10 到 +10 之间）。")
         appendLine("5. 待办：彻底完成的放进 complete；有进展但没完成的用 update 改写；新出现的放进 add。")
         appendLine("6. 角色之间交接物品写 transfers；从环境中获得或消耗的物品写 player.inventory 或 npcs[].inventory。同一件事只记一次。")
@@ -23,6 +23,15 @@ object StateKeeperPromptTemplate {
         appendLine("8. npcs[].memory：这个角色以后会记得的一件事，一句话；没有就不写。")
         appendLine("9. suggestions：给出 3 个玩家接下来可能想做的事，每条 15 字以内，贴合当前局面，彼此不同。")
         appendLine("10. 只输出 JSON。")
+        val worldRules = world.lore.rules
+            .map { it.trim().take(140) }
+            .filter(String::isNotBlank)
+            .take(6)
+        if (worldRules.isNotEmpty()) {
+            appendLine()
+            appendLine("【世界特殊状态规则（必须同步更新对应字段）】")
+            worldRules.forEach { rule -> appendLine("- $rule") }
+        }
         appendLine()
         appendLine("【字段说明】")
         CharacterFieldPolicy.effectiveDefinitions(world.characterFields)

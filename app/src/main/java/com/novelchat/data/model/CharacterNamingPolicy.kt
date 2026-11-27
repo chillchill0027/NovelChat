@@ -66,6 +66,7 @@ object CharacterNamingPolicy {
         if (value.isBlank()) return true
         return genericNameRegex.matches(value) ||
             contextualGenericNameRegex.matches(value) ||
+            wuxiaGenericNpcRegex.containsMatchIn(value) ||
             value in genericNames
     }
 
@@ -156,6 +157,10 @@ object CharacterNamingPolicy {
 
     private val genericNameRegex = Regex(
         """^(邻居|居民|路人|同事|店员|前台|接待|服务员|工作人员|顾客|医生|护士|保安|司机|老板|店主|房东|招聘顾问|顾问|男子|女子|老人|年轻人|陌生人)([A-Z甲乙丙丁一二三四五六七八九十0-9]*)$"""
+    )
+
+    private val wuxiaGenericNpcRegex = Regex(
+        """^(?:账房先生|店小二|掌柜|车夫|村妇|樵夫|渔夫|道士|道人|行商|侠客)[A-Z0-9甲乙丙丁一二三四]?$|(?:老汉|汉子|商人|江湖客|村妇|小二|道士|道人|书生|商旅)$"""
     )
 
     private const val placeholderMarkers = "甲乙丙丁一二三四五六七八九十"

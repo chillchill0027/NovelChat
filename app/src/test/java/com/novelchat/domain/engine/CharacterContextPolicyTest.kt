@@ -2,8 +2,8 @@ package com.novelchat.domain.engine
 
 import com.novelchat.data.model.CharacterCard
 import com.novelchat.data.model.NarrativeEntry
-import com.novelchat.data.model.defaultModernCharacters
-import com.novelchat.data.model.defaultModernStoryState
+import com.novelchat.data.model.defaultStoryCharacters
+import com.novelchat.data.model.defaultStoryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -134,17 +134,18 @@ class CharacterContextPolicyTest {
     }
 
     @Test
-    fun selectForNarrative_defaultOpeningIncludesEveryNamedContact() {
+    fun selectForNarrative_defaultOpeningIncludesEveryPresentCharacter() {
+        val openingState = defaultStoryState()
         val selected = CharacterContextPolicy.selectForNarrative(
-            allCharacters = defaultModernCharacters(createdAt = "2026-07-19T00:00:00Z"),
-            sceneCharacterNames = emptyList(),
-            userMessage = "开始这一天",
-            contextText = defaultModernStoryState().pendingEvents.joinToString("\n")
+            allCharacters = defaultStoryCharacters(createdAt = "2026-11-27T00:00:00Z"),
+            sceneCharacterNames = openingState.activeCharacters,
+            userMessage = "抱拳行礼，环顾演武场众人",
+            contextText = openingState.pendingEvents.joinToString("\n")
         )
 
         assertEquals(
-            listOf("房东陈姐", "同事林越", "招聘顾问孟琪"),
-            selected.map { it.name }
+            listOf("赵志敬", "鹿清笃", "甄志丙"),
+            selected.take(3).map { it.name }
         )
     }
 
